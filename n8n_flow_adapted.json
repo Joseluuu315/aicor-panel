@@ -1,0 +1,591 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bot-config-update",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-480, 400],
+      "id": "webhook-config-update",
+      "name": "Panel Config Webhook",
+      "webhookId": "bot-config-update",
+      "notes": "Recibe cambios en tiempo real desde el panel React. Responde 200 y actualiza la caché interna."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// Procesar cambio de config recibido desde el panel\n// ═══════════════════════════════════════════════════════\nconst body = $json.body || $json;\nconst { action, key, value, timestamp } = body;\n\nconsole.log(`[CONFIG UPDATE] action=${action} key=${key} ts=${timestamp}`);\n\n// Guardamos en memoria de ejecución para que el flujo principal la use\n// en la próxima ejecución (n8n no tiene estado global entre ejecuciones,\n// pero Supabase ya fue actualizado por el panel)\nreturn [{ json: { ok: true, action, key, message: `Config '${key}' procesada` } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 400],
+      "id": "process-config-update",
+      "name": "Procesar Config Update"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, message: 'Config recibida', key: $json.key }) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [0, 400],
+      "id": "respond-config-webhook",
+      "name": "Responder Panel OK"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [-480, 800],
+      "id": "0cc97795-72e1-4451-98fa-b2d57b93f97c",
+      "name": "When chat message received",
+      "webhookId": "48e4053f-83ac-471e-880e-91f47e39b0ee"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// ENTRADA: Prepara sesión + mensaje del usuario\n// ═══════════════════════════════════════════════════════\nconst sessionId = $json.sessionId || $execution?.id || 'default';\nconst userMsg = (\n  $json.chatInput ||\n  $json.message ||\n  $json.text ||\n  ''\n).trim();\n\nreturn [{ json: { ...$json, sessionId, userMsg } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 800],
+      "id": "84ff4f41-9055-4dab-accf-e7727a919207",
+      "name": "Preparar Sesion"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "bot_config",
+        "filters": {},
+        "options": { "limit": 50 }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-240, 960],
+      "id": "load-bot-config",
+      "name": "Cargar Config desde Supabase",
+      "notes": "Lee TODA la config del bot (prompts + ajustes generales) en cada ejecución"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// Construir mapa key→value de la configuración del bot\n// ═══════════════════════════════════════════════════════\nconst configRows = $input.all().map(i => i.json);\nconst config = {};\nfor (const row of configRows) {\n  config[row.key] = row.value;\n}\n\n// Pasar la config al contexto de la ejecución\nreturn [{ json: { botConfig: config } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 960],
+      "id": "build-config-map",
+      "name": "Construir Mapa Config"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "bot_endpoints",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "active",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [0, 1080],
+      "id": "load-endpoints",
+      "name": "Cargar Endpoints Activos",
+      "notes": "Lee los endpoints configurados en el panel"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// Combinar config + endpoints en un solo objeto\n// ═══════════════════════════════════════════════════════\nconst botConfig = $('Construir Mapa Config').first().json.botConfig || {};\nconst endpoints = $input.all().map(i => i.json);\n\n// Endpoint principal para leads (primer endpoint activo con key 'lead_erp' o el primero)\nconst leadEndpoint = endpoints.find(e => e.key === 'lead_erp') || endpoints[0] || null;\n\nreturn [{ json: { botConfig, endpoints, leadEndpoint } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 1020],
+      "id": "merge-config",
+      "name": "Merge Config + Endpoints"
+    },
+    {
+      "parameters": {
+        "tableId": "chat_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "session_id", "fieldValue": "={{ $('Preparar Sesion').first().json.sessionId }}" },
+            { "fieldId": "role",       "fieldValue": "user" },
+            { "fieldId": "content",    "fieldValue": "={{ $('Preparar Sesion').first().json.userMsg }}" },
+            { "fieldId": "created_at", "fieldValue": "={{ new Date().toISOString() }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [0, 800],
+      "id": "de1e68fa-17ad-4f36-abc2-514aed72b76e",
+      "name": "Guardar Mensaje Usuario"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "={{ $('Merge Config + Endpoints').first().json.botConfig.system_prompt || 'Eres el asistente de Aicor Consultores Informáticos. Ayuda al usuario y recoge sus datos de contacto.' }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [480, 800],
+      "id": "2909280d-1023-458b-9d65-b289b0960d6d",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// Guardar respuesta del agente\n// ═══════════════════════════════════════════════════════\nconst sessionId = $('Preparar Sesion').first().json.sessionId;\nconst agentRaw = ($json.output || '').trim();\nconst agentLimpio = agentRaw.replace(/LEAD_CAPTURED[\\s\\S]*/gi, '').trim();\n\nreturn [{ json: { ...$json, sessionId, agentLimpio } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 800],
+      "id": "b7b9306e-3d3c-48b9-ae5d-928cc8209ba1",
+      "name": "Preparar Respuesta Agente"
+    },
+    {
+      "parameters": {
+        "tableId": "chat_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "session_id", "fieldValue": "={{ $json.sessionId }}" },
+            { "fieldId": "role",       "fieldValue": "assistant" },
+            { "fieldId": "content",    "fieldValue": "={{ $json.agentLimpio }}" },
+            { "fieldId": "created_at", "fieldValue": "={{ new Date().toISOString() }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [960, 800],
+      "id": "a3767352-9e5f-4129-93b6-adb56da28935",
+      "name": "Guardar Respuesta Agente"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// Detectar si hay LEAD_CAPTURED en el output\n// ═══════════════════════════════════════════════════════\nconst rawOutput = ($('Preparar Respuesta Agente').first().json.output || '').trim();\n\nif (!rawOutput) {\n  return [{ json: { output: 'Solicitud recibida. ¿En qué más puedo ayudarte?', hasLead: false } }];\n}\n\nconst corteIndex = rawOutput.search(/LEAD_CAPTURED\\s*[:({]/);\nlet cleanOutput = rawOutput;\nlet leadPart = null;\n\nif (corteIndex !== -1) {\n  cleanOutput = rawOutput.substring(0, corteIndex).trim();\n  leadPart = rawOutput.substring(corteIndex).trim();\n}\n\ncleanOutput = cleanOutput\n  .replace(/LEAD_CAPTURED[\\s\\S]*/gi, '')\n  .replace(/\\{[\\s\\S]*\"nombre\"[\\s\\S]*\\}/gi, '')\n  .trim();\n\nif (/^[\\[{]/.test(cleanOutput)) cleanOutput = '';\n\nif (leadPart) {\n  try {\n    const jsonMatch = leadPart.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      const leadData = JSON.parse(jsonMatch[0]);\n      const nombre   = (leadData.nombre   || '').replace(/[\\[\\]]/g, '').trim();\n      const email    = (leadData.email    || '').replace(/[\\[\\]]/g, '').trim();\n      const telefono = (leadData.telefono || '').replace(/[\\[\\]]/g, '').trim();\n\n      const tieneplaceholders = ['[nombre]','[email]','[telefono]','[nombre real]','[email real]','[telefono real]']\n        .some(p => nombre.toLowerCase() === p || email.toLowerCase() === p || telefono.toLowerCase() === p);\n\n      const esValido = !tieneplaceholders\n        && nombre.length > 1\n        && (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || telefono.replace(/\\D/g, '').length >= 6);\n\n      if (esValido) {\n        if (!cleanOutput) {\n          cleanOutput = `Perfecto, ${nombre}. Ya lo tenemos apuntado, te contactamos en breve. Cualquier duda, aquí estoy.`;\n        }\n        return [{\n          json: {\n            output: cleanOutput,\n            hasLead: true,\n            lead: {\n              nombre,\n              email,\n              telefono,\n              producto_interes: (leadData.producto_interes || 'General').replace(/[\\[\\]]/g, '').trim(),\n              contexto:         (leadData.contexto || '').trim(),\n              origen:           (leadData.origen || 'chatbot').trim(),\n              timestamp:        leadData.timestamp || new Date().toISOString()\n            }\n          }\n        }];\n      }\n    }\n  } catch (e) {}\n}\n\nreturn [{ json: { output: cleanOutput || 'Disculpa, ¿en qué más puedo ayudarte?', hasLead: false } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 800],
+      "id": "2fd5fb3d-4a70-4a94-ac1f-6d53327e2916",
+      "name": "Detectar Lead1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            {
+              "id": "cond-lead-001",
+              "leftValue": "={{ $json.hasLead }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1440, 800],
+      "id": "6317e22d-38df-4a5b-a00c-125916329307",
+      "name": "¿Hay Lead?1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// Preparar body de la API usando el endpoint configurado\n// desde Supabase (no hardcodeado)\n// ═══════════════════════════════════════════════════════\nconst lead = $json.lead;\nconst ts   = lead.timestamp || new Date().toISOString();\nconst cfg  = $('Merge Config + Endpoints').first().json;\nconst campaniaId = cfg.botConfig?.lead_campania_id || '50';\n\nconst bodyApi = {\n  asunto: `Demo chatbot: ${lead.producto_interes} | ${lead.email} | ${ts}`,\n  detalle: lead.contexto || '',\n  origen: 'chatbot',\n  erp_campania_comercial_id: campaniaId,\n  cliente: {\n    nombre:   lead.nombre,\n    email:    lead.email,\n    empresa:  '',\n    telefono: lead.telefono\n  }\n};\n\nconst endpoint = cfg.leadEndpoint || {\n  url:            'https://dev.estratosplus.com/estratos/api/v1/erp/AutomatizacionOportunidadesWs/set_oportunidad',\n  method:         'POST',\n  api_key_header: 'x-estratos-api-key',\n  api_key_value:  'c1544aa59ebd3372531edbeb88c55bda'\n};\n\nreturn [{ json: { lead, bodyApiString: JSON.stringify(bodyApi), endpoint } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 780],
+      "id": "8ea9aad4-e78a-4128-9757-f5ffd73f7f06",
+      "name": "Preparar Body API"
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.endpoint.method || 'POST' }}",
+        "url": "={{ $json.endpoint.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'Content-Type': 'application/json', 'x-estratos-api-instance': 'c0d1df44', [$json.endpoint.api_key_header || 'x-api-key']: $json.endpoint.api_key_value }) }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.bodyApiString }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1920, 780],
+      "id": "38e73e61-1454-4064-9969-24ec9574ee5f",
+      "name": "Enviar Lead a API Externa1",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Preparar Body API').item.json.lead;\nconst respuesta = $json;\n\nreturn [{\n  json: {\n    nombre:           lead.nombre,\n    email:            lead.email,\n    telefono:         lead.telefono,\n    producto_interes: lead.producto_interes || 'General',\n    contexto:         lead.contexto || '',\n    origen:           lead.origen || 'chatbot',\n    estado:           'OK',\n    error_detalle:    null,\n    respuesta_api:    JSON.stringify(respuesta)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 700],
+      "id": "a6f13ba8-334a-4eab-9f14-e3e7278c7ade",
+      "name": "Preparar Log OK1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Preparar Body API').item.json.lead;\nconst error = $json;\n\nlet errorDetalle = '';\ntry {\n  const errObj = typeof error === 'string' ? JSON.parse(error) : error;\n  errorDetalle = errObj.message || errObj.error || JSON.stringify(errObj);\n} catch(e) {\n  errorDetalle = JSON.stringify(error);\n}\n\nreturn [{\n  json: {\n    nombre:           lead.nombre,\n    email:            lead.email,\n    telefono:         lead.telefono,\n    producto_interes: lead.producto_interes || 'General',\n    contexto:         lead.contexto || '',\n    origen:           lead.origen || 'chatbot',\n    estado:           'ERROR',\n    error_detalle:    errorDetalle,\n    respuesta_api:    null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 880],
+      "id": "754273c0-3abf-4529-b9be-e11814bc47b6",
+      "name": "Preparar Log ERROR1"
+    },
+    {
+      "parameters": {
+        "tableId": "lead_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "nombre",           "fieldValue": "={{ $json.nombre }}" },
+            { "fieldId": "email",            "fieldValue": "={{ $json.email }}" },
+            { "fieldId": "telefono",         "fieldValue": "={{ $json.telefono }}" },
+            { "fieldId": "producto_interes", "fieldValue": "={{ $json.producto_interes }}" },
+            { "fieldId": "contexto",         "fieldValue": "={{ $json.contexto }}" },
+            { "fieldId": "origen",           "fieldValue": "={{ $json.origen }}" },
+            { "fieldId": "estado",           "fieldValue": "={{ $json.estado }}" },
+            { "fieldId": "error_detalle",    "fieldValue": "={{ $json.error_detalle }}" },
+            { "fieldId": "respuesta_api",    "fieldValue": "={{ $json.respuesta_api }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2400, 700],
+      "id": "e94a1405-040c-422b-88ad-553797e21c99",
+      "name": "Log OK en Supabase1"
+    },
+    {
+      "parameters": {
+        "tableId": "lead_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "nombre",           "fieldValue": "={{ $json.nombre }}" },
+            { "fieldId": "email",            "fieldValue": "={{ $json.email }}" },
+            { "fieldId": "telefono",         "fieldValue": "={{ $json.telefono }}" },
+            { "fieldId": "producto_interes", "fieldValue": "={{ $json.producto_interes }}" },
+            { "fieldId": "contexto",         "fieldValue": "={{ $json.contexto }}" },
+            { "fieldId": "origen",           "fieldValue": "={{ $json.origen }}" },
+            { "fieldId": "estado",           "fieldValue": "={{ $json.estado }}" },
+            { "fieldId": "error_detalle",    "fieldValue": "={{ $json.error_detalle }}" },
+            { "fieldId": "respuesta_api",    "fieldValue": "={{ $json.respuesta_api }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2400, 880],
+      "id": "e018fff0-1656-486f-a0d7-e5abdf823b2a",
+      "name": "Log ERROR en Supabase1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// TRANSCRIPT: preparar datos\n// ═══════════════════════════════════════════════════════\nconst sessionId = $('Preparar Sesion').first().json.sessionId;\nconst logData   = $('Preparar Log OK1').item?.json || {};\nconst transcriptFormat = $('Merge Config + Endpoints').first().json.botConfig?.transcript_format || 'html';\n\nreturn [{\n  json: {\n    sessionId,\n    transcriptFormat,\n    leadNombre: logData.nombre           || 'Desconocido',\n    leadEmail:  logData.email            || '',\n    leadTel:    logData.telefono         || '',\n    leadProd:   logData.producto_interes || 'General',\n    leadCtx:    logData.contexto         || ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 700],
+      "id": "e1704780-0b15-4174-8a72-06fc42d46a43",
+      "name": "Preparar Datos Transcript"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "chat_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.sessionId }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2880, 700],
+      "id": "09e25973-a061-4933-b6ef-cdab8ad0c839",
+      "name": "Leer Historial de Supabase"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════════\n// GENERAR TRANSCRIPT según formato configurado en el panel\n// Soporta: html | json | pdf (pdf genera HTML que Supabase guarda\n// con extensión .pdf — para PDF real añadir nodo de conversión)\n// ═══════════════════════════════════════════════════════════════\nconst prepData = $('Preparar Datos Transcript').first().json;\nconst format   = (prepData.transcriptFormat || 'html').toLowerCase();\nconst { leadNombre, leadEmail, leadTel, leadProd, leadCtx } = prepData;\n\nconst items   = $input.all();\nconst historia = items.map(i => i.json).filter(m => m.role && m.content);\n\nconst now           = new Date();\nconst timestamp     = now.toISOString();\nconst fechaLegible  = now.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });\nconst fileTimestamp = timestamp.replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);\n\nfunction esc(str) {\n  return String(str || '')\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/\\n/g, '<br>');\n}\n\nlet fileContent, fileName, storagePath, contentType;\n\nif (format === 'json') {\n  // ── JSON ─────────────────────────────────────────────────\n  const output = {\n    meta: { generated_at: timestamp, lead_nombre: leadNombre, lead_email: leadEmail, message_count: historia.length },\n    lead: { nombre: leadNombre, email: leadEmail, telefono: leadTel, producto: leadProd, contexto: leadCtx },\n    messages: historia.map(m => ({ role: m.role, content: m.content, created_at: m.created_at || null }))\n  };\n  fileContent  = JSON.stringify(output, null, 2);\n  fileName     = `transcript_${fileTimestamp}.json`;\n  storagePath  = `chatbot/transcript_${fileTimestamp}.json`;\n  contentType  = 'application/json';\n\n} else {\n  // ── HTML (también para pdf hasta tener nodo de conversión) ─\n  const mensajesHtml = historia.length\n    ? historia.map(msg => {\n        const isUser  = msg.role === 'user';\n        const label   = isUser ? '👤 Usuario' : '🤖 Asistente';\n        const bgColor = isUser ? '#EEF2FF' : '#F0FDF4';\n        const border  = isUser ? '#818CF8' : '#4ADE80';\n        const labelClr = isUser ? '#3730A3' : '#166534';\n        const hora    = msg.created_at\n          ? new Date(msg.created_at).toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })\n          : '';\n        return `<div style=\"margin-bottom:14px;padding:14px 18px;background:${bgColor};border-left:4px solid ${border};border-radius:0 8px 8px 0;\">\n  <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;\">\n    <span style=\"font-size:11px;font-weight:700;color:${labelClr};text-transform:uppercase;\">${label}</span>\n    ${hora ? `<span style=\"font-size:11px;color:#9CA3AF;\">${hora}</span>` : ''}\n  </div>\n  <div style=\"font-size:14px;line-height:1.7;color:#1F2937;\">${esc(msg.content)}</div>\n</div>`;\n      }).join('')\n    : '<p style=\"color:#6B7280;font-style:italic;\">No hay mensajes.</p>';\n\n  const fichaLead = `<div style=\"margin-top:28px;padding:18px 20px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;\">\n  <div style=\"font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;margin-bottom:14px;\">📋 Datos del lead</div>\n  <table style=\"width:100%;border-collapse:collapse;font-size:13px;\">\n    <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;width:130px;\">Nombre</td><td style=\"padding:5px 0;color:#111827;font-weight:500;\">${esc(leadNombre)}</td></tr>\n    <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Email</td><td>${esc(leadEmail)}</td></tr>\n    <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Teléfono</td><td>${esc(leadTel)}</td></tr>\n    <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Producto</td><td>${esc(leadProd)}</td></tr>\n    ${leadCtx ? `<tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Contexto</td><td>${esc(leadCtx)}</td></tr>` : ''}\n  </table>\n</div>`;\n\n  fileContent = `<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"><title>Transcript – Aicor</title></head><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F9FAFB;padding:32px 16px\">\n<div style=\"max-width:780px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.12);overflow:hidden\">\n  <div style=\"background:linear-gradient(135deg,#1E40AF,#2563EB);color:#fff;padding:28px 32px\">\n    <h1 style=\"font-size:20px;font-weight:600;margin:0 0 8px\">📋 Transcript</h1>\n    <p style=\"font-size:13px;opacity:.85;margin:0\">🕐 ${fechaLegible}<br>👤 ${esc(leadNombre)}${leadEmail ? ' &lt;' + esc(leadEmail) + '&gt;' : ''}<br>📨 ${historia.length} mensajes</p>\n  </div>\n  <div style=\"padding:28px 32px\">${mensajesHtml}${fichaLead}</div>\n  <div style=\"background:#F3F4F6;padding:14px 32px;font-size:11px;color:#9CA3AF;\">Generado por Aicor Chatbot · ${timestamp}</div>\n</div></body></html>`;\n\n  const ext       = format === 'pdf' ? 'pdf' : 'html';\n  fileName        = `transcript_${fileTimestamp}.${ext}`;\n  storagePath     = `chatbot/transcript_${fileTimestamp}.${ext}`;\n  contentType     = format === 'pdf' ? 'application/pdf' : 'text/html; charset=utf-8';\n}\n\nreturn [{\n  json: {\n    html_content:   fileContent,\n    file_name:      fileName,\n    lead_nombre:    leadNombre,\n    lead_email:     leadEmail,\n    created_at:     timestamp,\n    message_count:  historia.length,\n    storage_path:   storagePath,\n    content_type:   contentType\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, 700],
+      "id": "73f4fb38-b676-42c3-8d0d-8e44bc58f1bf",
+      "name": "Generate Transcript (multi-format)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://uovfdghgbanhjojtobtz.supabase.co/storage/v1/object/transcripts/{{ $json.storage_path }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Authorization\": \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvdmZkZ2hnYmFuaGpvanRvYnR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzUzMzY3OCwiZXhwIjoyMDkzMTA5Njc4fQ.MCH7Gisb0xbo-H7m2GugydXDlH-feiaFUiWePzfrKdM\",\n  \"Content-Type\": \"{{ $json.content_type }}\",\n  \"x-upsert\": \"true\"\n}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "={{ $json.content_type }}",
+        "body": "={{ $json.html_content }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3360, 700],
+      "id": "9aeb96b8-dc36-4907-b351-06c68c326150",
+      "name": "Upload to Supabase Storage",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uploadResponse = $json;\nconst prevData = $('Generate Transcript (multi-format)').item.json;\nconst storagePath = prevData.storage_path;\nconst publicUrl   = `https://uovfdghgbanhjojtobtz.supabase.co/storage/v1/object/public/transcripts/${storagePath}`;\nconst uploadOk    = uploadResponse.statusCode >= 200 && uploadResponse.statusCode < 300;\n\nreturn [{\n  json: {\n    file_url:        uploadOk ? publicUrl : null,\n    storage_path:    storagePath,\n    file_name:       prevData.file_name,\n    lead_nombre:     prevData.lead_nombre,\n    lead_email:      prevData.lead_email,\n    message_count:   prevData.message_count,\n    created_at:      prevData.created_at,\n    upload_status:   uploadOk ? 'OK' : 'ERROR',\n    upload_response: JSON.stringify(uploadResponse)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3600, 700],
+      "id": "e0f96fbd-3ebc-4187-9145-bada4efae2b2",
+      "name": "Prepare Transcript Metadata1"
+    },
+    {
+      "parameters": {
+        "tableId": "transcript_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "file_url",        "fieldValue": "={{ $json.file_url }}" },
+            { "fieldId": "storage_path",    "fieldValue": "={{ $json.storage_path }}" },
+            { "fieldId": "file_name",       "fieldValue": "={{ $json.file_name }}" },
+            { "fieldId": "lead_nombre",     "fieldValue": "={{ $json.lead_nombre }}" },
+            { "fieldId": "lead_email",      "fieldValue": "={{ $json.lead_email }}" },
+            { "fieldId": "message_count",   "fieldValue": "={{ $json.message_count }}" },
+            { "fieldId": "created_at",      "fieldValue": "={{ $json.created_at }}" },
+            { "fieldId": "upload_status",   "fieldValue": "={{ $json.upload_status }}" },
+            { "fieldId": "upload_response", "fieldValue": "={{ $json.upload_response }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [3840, 700],
+      "id": "da290f5e-89c9-4956-98b8-b45cea48cf5d",
+      "name": "Save Transcript Metadata1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"output\": \"{{ $('Merge Config + Endpoints').first().json.botConfig.lead_fallback_message || 'He recibido tus datos, pero ahora mismo no he podido registrarlos bien. ¿Puedes intentarlo en unos minutos?' }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2640, 880],
+      "id": "fca91d1c-9193-45d5-8d6f-ef7a2ba2ab3a",
+      "name": "Respuesta Error"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"output\": \"Perfecto, {{ $json.lead_nombre }}. Ya lo tenemos apuntado, te contactamos en breve. Cualquier duda, aquí estoy.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [4080, 700],
+      "id": "e517f4ee-3a32-4698-917a-5ef5f5ea4742",
+      "name": "Respuesta Final OK"
+    },
+    {
+      "parameters": {
+        "model": "meta-llama/llama-3.3-70b-instruct",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [400, 1020],
+      "id": "04f86376-1052-4fcc-bd20-009ee20044dd",
+      "name": "OpenRouter Chat Model1"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [530, 1020],
+      "id": "27f9349b-77bf-40a2-ba74-5efe09180471",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Busca información sobre productos, servicios, precios, promociones, FAQs y procedimientos de Aicor.",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [660, 1020],
+      "id": "4b8ae4c5-8e0d-4bc1-8b7d-37240edccd5d",
+      "name": "Supabase Vector Store1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [790, 1020],
+      "id": "e124bbee-906b-4a99-b2e4-52a800ed2b88",
+      "name": "Embeddings HuggingFace Inference1"
+    }
+  ],
+  "connections": {
+    "Panel Config Webhook": {
+      "main": [[{ "node": "Procesar Config Update", "type": "main", "index": 0 }]]
+    },
+    "Procesar Config Update": {
+      "main": [[{ "node": "Responder Panel OK", "type": "main", "index": 0 }]]
+    },
+    "When chat message received": {
+      "main": [[{ "node": "Preparar Sesion", "type": "main", "index": 0 }]]
+    },
+    "Preparar Sesion": {
+      "main": [
+        [{ "node": "Guardar Mensaje Usuario", "type": "main", "index": 0 }],
+        [{ "node": "Cargar Config desde Supabase", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cargar Config desde Supabase": {
+      "main": [[{ "node": "Construir Mapa Config", "type": "main", "index": 0 }]]
+    },
+    "Construir Mapa Config": {
+      "main": [[{ "node": "Cargar Endpoints Activos", "type": "main", "index": 0 }]]
+    },
+    "Cargar Endpoints Activos": {
+      "main": [[{ "node": "Merge Config + Endpoints", "type": "main", "index": 0 }]]
+    },
+    "Guardar Mensaje Usuario": {
+      "main": [[{ "node": "AI Agent1", "type": "main", "index": 0 }]]
+    },
+    "Merge Config + Endpoints": {
+      "main": [[{ "node": "AI Agent1", "type": "main", "index": 0 }]]
+    },
+    "AI Agent1": {
+      "main": [[{ "node": "Preparar Respuesta Agente", "type": "main", "index": 0 }]]
+    },
+    "Preparar Respuesta Agente": {
+      "main": [[{ "node": "Guardar Respuesta Agente", "type": "main", "index": 0 }]]
+    },
+    "Guardar Respuesta Agente": {
+      "main": [[{ "node": "Detectar Lead1", "type": "main", "index": 0 }]]
+    },
+    "Detectar Lead1": {
+      "main": [[{ "node": "¿Hay Lead?1", "type": "main", "index": 0 }]]
+    },
+    "¿Hay Lead?1": {
+      "main": [
+        [{ "node": "Preparar Body API", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Preparar Body API": {
+      "main": [[{ "node": "Enviar Lead a API Externa1", "type": "main", "index": 0 }]]
+    },
+    "Enviar Lead a API Externa1": {
+      "main": [
+        [{ "node": "Preparar Log OK1", "type": "main", "index": 0 }],
+        [{ "node": "Preparar Log ERROR1", "type": "main", "index": 0 }]
+      ]
+    },
+    "Preparar Log OK1": {
+      "main": [[{ "node": "Log OK en Supabase1", "type": "main", "index": 0 }]]
+    },
+    "Preparar Log ERROR1": {
+      "main": [[{ "node": "Log ERROR en Supabase1", "type": "main", "index": 0 }]]
+    },
+    "Log OK en Supabase1": {
+      "main": [[{ "node": "Preparar Datos Transcript", "type": "main", "index": 0 }]]
+    },
+    "Log ERROR en Supabase1": {
+      "main": [[{ "node": "Respuesta Error", "type": "main", "index": 0 }]]
+    },
+    "Preparar Datos Transcript": {
+      "main": [[{ "node": "Leer Historial de Supabase", "type": "main", "index": 0 }]]
+    },
+    "Leer Historial de Supabase": {
+      "main": [[{ "node": "Generate Transcript (multi-format)", "type": "main", "index": 0 }]]
+    },
+    "Generate Transcript (multi-format)": {
+      "main": [[{ "node": "Upload to Supabase Storage", "type": "main", "index": 0 }]]
+    },
+    "Upload to Supabase Storage": {
+      "main": [[{ "node": "Prepare Transcript Metadata1", "type": "main", "index": 0 }]]
+    },
+    "Prepare Transcript Metadata1": {
+      "main": [[{ "node": "Save Transcript Metadata1", "type": "main", "index": 0 }]]
+    },
+    "Save Transcript Metadata1": {
+      "main": [[{ "node": "Respuesta Final OK", "type": "main", "index": 0 }]]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [[{ "node": "AI Agent1", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Simple Memory1": {
+      "ai_memory": [[{ "node": "AI Agent1", "type": "ai_memory", "index": 0 }]]
+    },
+    "Supabase Vector Store1": {
+      "ai_tool": [[{ "node": "AI Agent1", "type": "ai_tool", "index": 0 }]]
+    },
+    "Embeddings HuggingFace Inference1": {
+      "ai_embedding": [[{ "node": "Supabase Vector Store1", "type": "ai_embedding", "index": 0 }]]
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "83a0c81df85bf9376c9bd1175d07d72f656f294b92807431b3b09acbaccc6d0b"
+  }
+}
