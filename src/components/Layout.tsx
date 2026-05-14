@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
-type Page = 'dashboard' | 'transcripts' | 'endpoints' | 'prompts' | 'config' | 'filters'
+type Page = 'dashboard' | 'transcripts' | 'endpoints' | 'prompts' | 'config' | 'filters' | 'example' | 'scraper'
 
 interface LayoutProps {
   children: ReactNode
@@ -23,6 +23,8 @@ export function Layout({ children, page, onNav }: LayoutProps) {
     { id: 'prompts',     label: 'Prompts',      icon: <MessageSquare size={15} /> },
     { id: 'config',      label: 'Configuración',icon: <Settings size={15} /> },
     { id: 'filters',     label: 'Filtros',      icon: <Users size={15} /> },
+    { id: 'example',     label: 'Ejemplo',      icon: <Bot size={15} /> },
+    { id: 'scraper',     label: 'Scraper',      icon: <Bot size={15} /> },
   ]
 
   return (

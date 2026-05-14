@@ -9,8 +9,10 @@ import { EndpointsPage } from './pages/EndpointsPage'
 import { PromptsPage } from './pages/PromptsPage'
 import { ConfigPage } from './pages/ConfigPage'
 import { FiltersPage } from './pages/FiltersPage'
+import { ExamplePage } from './pages/ExamplePage'
+import { ScraperPage } from './pages/ScraperPage'
 
-type Page = 'dashboard' | 'transcripts' | 'endpoints' | 'prompts' | 'config' | 'filters'
+type Page = 'dashboard' | 'transcripts' | 'endpoints' | 'prompts' | 'config' | 'filters' | 'example' | 'scraper'
 
 function AppInner() {
   const { isAuthenticated } = useAuth()
@@ -25,6 +27,8 @@ function AppInner() {
     prompts:     <PromptsPage />,
     config:      <ConfigPage />,
     filters:     <FiltersPage />,
+    example:     <ExamplePage />,
+    scraper:     <ScraperPage />,
   }
 
   return (
