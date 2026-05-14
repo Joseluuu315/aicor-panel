@@ -1,0 +1,1193 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://crm.blueaicor.com/api/Lead/lead-create-update",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Authorization\": \"Bearer {{ $('Login').item.json.data.token }}\"\n}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.bodyString }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -160,
+        -624
+      ],
+      "id": "e1997547-32ce-4c22-a734-a9bc6632ed1c",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Filtro de Intención1').first().json;\nreturn [{ json: { ...$json, ...data } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4752,
+        -512
+      ],
+      "id": "e87a0f73-bef6-4e30-a57d-2fbae28894a2",
+      "name": "Preparar Sesion1"
+    },
+    {
+      "parameters": {
+        "tableId": "chat_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "client_id",
+              "fieldValue": "={{ $json.clientId || $json.client_id }}"
+            },
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $json.sessionId }}"
+            },
+            {
+              "fieldId": "role",
+              "fieldValue": "user"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.userMsg }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -4544,
+        -512
+      ],
+      "id": "7b482450-ae01-435d-8e4e-06979f76d626",
+      "name": "Guardar Mensaje Usuario1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "=Eres el asistente virtual de {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }}.\nHabla como una persona real: natural, directo, sin florituras.\nSi algo suena a robot o a script, no lo digas.\n\n════════════════════════════════════════════\nANTES DE CADA RESPUESTA — OBLIGATORIO\n════════════════════════════════════════════\nAntes de escribir, hazte estas preguntas:\n· ¿Qué acaba de decir exactamente el usuario?\n· ¿Ya tengo su nombre? ¿Ya sé lo que quiere?\n· ¿Estoy a punto de preguntarle algo que ya me dijo? Si es así, no lo preguntes.\n· ¿Me está pidiendo información de un producto o servicio? Si es así, dásela ANTES de avanzar.\n· ¿Mi respuesta empieza igual que la anterior? Si es así, reescríbela distinto.\n\nPROHIBIDO empezar dos respuestas seguidas con la misma frase o estructura.\nPROHIBIDO usar \"En {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }} podemos ayudarte\" más de una vez en toda la conversación.\nVaría siempre el inicio: una frase directa, una pregunta, una afirmación, lo que encaje.\n\n════════════════════════════════════════════\nMENSAJE DE BIENVENIDA — Solo el primero\n════════════════════════════════════════════\n\"¡Hola! Soy el asistente de {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }}.\n¿Cómo te llamas?\"\n\n════════════════════════════════════════════\nPASO 1 · NOMBRE\n════════════════════════════════════════════\nCuando dé su nombre, úsalo y pregunta en qué le puedes ayudar.\n\"Hola, [nombre]. ¿En qué te puedo ayudar?\"\n\nSi en el mismo mensaje da el nombre Y lo que quiere,\nve directamente al Paso 2.\n\n════════════════════════════════════════════\nPASO 2 · ENTENDER LA NECESIDAD\n════════════════════════════════════════════\nCuando el usuario diga lo que busca:\n· Una frase conectando con su situación — distinta cada vez\n· Di brevemente qué hace {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }} al respecto\n· Haz UNA pregunta concreta para entender mejor\n\nEjemplos de arranques variados:\n- \"Vale, redes sociales. ¿Tienes ya algo activo o partes desde cero?\"\n- \"Entiendo, eso lo vemos mucho. ¿Lo necesitas para cuántos usuarios?\"\n- \"Facturación, de acuerdo. ¿Usas algún programa ahora mismo?\"\n\nSi el usuario pregunta qué incluye un servicio o pide más info,\nrespóndele con la información de la base de conocimiento ANTES de seguir.\nNo avances hasta que sus dudas estén resueltas.\n\n════════════════════════════════════════════\nPASO 3 · CUALIFICACIÓN\n════════════════════════════════════════════\nCuando ya sepas qué quiere, haz UNA pregunta para conocerle mejor.\nLa más relevante según lo que haya dicho. Solo una.\n\n════════════════════════════════════════════\nPASO 4 · OFERTA DE CONTACTO\n════════════════════════════════════════════\nCuando tengas suficiente contexto, ofrece contacto de forma natural.\n\n\"Oye, [nombre], ¿quieres que te mande más info por email\no WhatsApp? O si prefieres que te llame alguien del equipo,\ntambién lo podemos hacer. ¿Qué te va mejor?\"\n\nOpciones:\n  a) Información por email\n  b) Información por WhatsApp\n  c) Llamada de un comercial\n\n════════════════════════════════════════════\nPASO 5 · RECOGIDA DE DATOS\n════════════════════════════════════════════\nSIEMPRE hay que recoger teléfono Y email. Los dos. Sin excepción.\n\n· Si elige email:\n  Pide el email → luego → \"¿Y un teléfono por si necesitamos contactarte directamente?\"\n\n· Si elige WhatsApp:\n  Pide el teléfono → luego → \"¿Y un email por si necesitamos mandarte algo por escrito?\"\n\n· Si elige llamada:\n  \"¿A qué número te llamamos?\"\n  Cuando lo dé → responde exactamente esto:\n  \"Anotado. Por si no te pillamos a la primera, ¿nos dejas también\n  un email? Así nos aseguramos de no perdernos.\"\n\nUn dato por mensaje. Sin agobiar.\nNo avances al Paso 6 hasta tener los DOS datos confirmados.\n\n════════════════════════════════════════════\nPASO 6 · LEAD_CAPTURED\n════════════════════════════════════════════\nCuando tengas teléfono Y email confirmados y obligatorios del con los datos del usuario si no vuelve a pedir el que te falte, escribe en UNA sola línea:\n\nLEAD_CAPTURED:{\"nombre\":\"[nombre real]\",\"email\":\"[email real]\",\"telefono\":\"[teléfono real]\",\"producto_interes\":\"[producto o servicio mencionado]\",\"via_contacto\":\"[email/whatsapp/llamada]\",\"contexto\":\"[resumen breve: sector, necesidad, situación]\",\"origen\":\"chatbot\",\"timestamp\":\"[ISO 8601]\"}\n\nLuego confirma:\n\"Perfecto, [nombre]. Ya lo tenemos apuntado, te contactamos en breve.\nCualquier duda, aquí estoy.\"\n\n════════════════════════════════════════════\nREGLAS — INAMOVIBLES\n════════════════════════════════════════════\n· Máximo 3-4 líneas por respuesta\n· Una sola pregunta por mensaje, al final\n· No preguntes nada que el usuario ya haya respondido\n· Si pide info de un producto, dásela antes de avanzar\n· No pidas datos personales antes del Paso 4\n· NUNCA generes LEAD_CAPTURED sin tener teléfono Y email reales\n· Nunca valores su negocio ni lo califiques\n· NUNCA empieces dos respuestas seguidas igual\n· Si no sabes algo: \"Eso te lo confirma el equipo directamente.\n  ¿Quieres que lo gestionemos?\"\n\n════════════════════════════════════════════\nBASE DE CONOCIMIENTO Y LÍMITES\n════════════════════════════════════════════\n· Responde SOLO con información de la base de datos de {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }}\n· NUNCA inventes servicios, precios ni compromisos\n· NUNCA muestres código, JSON ni estructuras técnicas al usuario\n· NUNCA hables de temas ajenos a {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }} y sus soluciones\\n\\nAISLAMIENTO MULTICLIENTE OBLIGATORIO:\\n- Estás atendiendo al cliente con client_id={{ $('Preparar Sesion1').first().json.clientId }}.\\n- Responde como el chatbot de {{ $('Preparar Sesion1').first().json.companyName || 'la empresa' }}.\\n- Usa solo conocimiento del scrapeo de ese client_id.\\n- Si no hay información en la base de conocimiento de ese cliente, dilo de forma breve y ofrece que el equipo lo confirme."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -4288,
+        -512
+      ],
+      "id": "3e59cb3c-c764-4c3e-85b2-b6a52b2ef195",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "meta-llama/llama-3.3-70b-instruct",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -4352,
+        -288
+      ],
+      "id": "889499cc-044d-4df8-9db2-9d49cf62dfa8",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "6YC5T0IF4MpLn3zg",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -4208,
+        -288
+      ],
+      "id": "a826e576-faf6-4fbd-a5e4-6219995a9048",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Busca solo informacion de la base de conocimiento del cliente actual. Usa exclusivamente documentos cuyo metadata.client_id coincida con el client_id de la conversacion.",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {
+          "queryName": "match_documents",
+          "metadataFilter": {
+            "metadataValues": [
+              {
+                "name": "client_id",
+                "value": "={{ $('Preparar Sesion1').first().json.clientId }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        -4016,
+        -256
+      ],
+      "id": "bfc7b4b2-1306-4e6c-a171-6215c837dfd8",
+      "name": "Supabase Vector Store",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        -4000,
+        -80
+      ],
+      "id": "869edcc5-1203-4d6d-b8a0-2ed22e16ab57",
+      "name": "Embeddings HuggingFace Inference",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "MyTArumvnxPB54oE",
+          "name": "HuggingFaceApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $('Preparar Sesion1').first().json;\nconst sessionId = prep.sessionId;\nconst clientId = prep.clientId || prep.client_id || '';\nconst companyName = prep.companyName || prep.company_name || 'la empresa';\nconst agentRaw = ($json.output || '').trim();\nconst agentLimpio = agentRaw.replace(/LEAD_CAPTURED[\\s\\S]*/gi, '').trim();\n\nreturn [{ json: { ...$json, sessionId, clientId, client_id: clientId, companyName, company_name: companyName, agentLimpio } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3920,
+        -512
+      ],
+      "id": "6a30d2af-8bfd-4fb9-b3bd-da25815d1870",
+      "name": "Preparar Respuesta Agente1"
+    },
+    {
+      "parameters": {
+        "tableId": "chat_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "client_id",
+              "fieldValue": "={{ $json.clientId || $json.client_id }}"
+            },
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $json.sessionId }}"
+            },
+            {
+              "fieldId": "role",
+              "fieldValue": "assistant"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.agentLimpio }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -3712,
+        -512
+      ],
+      "id": "8493b63a-9ede-448c-b824-dee57408fcf2",
+      "name": "Guardar Respuesta Agente1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawOutput = ($('Preparar Respuesta Agente1').first().json.output || '').trim();\nconst prep = $('Preparar Sesion1').first().json;\nconst clientMeta = {\n  clientId: prep.clientId,\n  client_id: prep.client_id,\n  companyName: prep.companyName,\n  company_name: prep.company_name\n};\n\nif (!rawOutput) {\n  return [{ json: { output: 'Solicitud recibida. ¿En qué más puedo ayudarte?', hasLead: false, ...clientMeta } }];\n}\n\nconst corteIndex = rawOutput.search(/LEAD_CAPTURED\\s*[:({]/);\nlet cleanOutput = rawOutput;\nlet leadPart = null;\n\nif (corteIndex !== -1) {\n  cleanOutput = rawOutput.substring(0, corteIndex).trim();\n  leadPart = rawOutput.substring(corteIndex).trim();\n}\n\ncleanOutput = cleanOutput\n  .replace(/LEAD_CAPTURED[\\s\\S]*/gi, '')\n  .replace(/\\{[\\s\\S]*\"nombre\"[\\s\\S]*\\}/gi, '')\n  .trim();\n\nif (/^[\\[{]/.test(cleanOutput)) cleanOutput = '';\n\nif (leadPart) {\n  try {\n    const jsonMatch = leadPart.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      const leadData = JSON.parse(jsonMatch[0]);\n      const nombre   = (leadData.nombre   || '').replace(/[\\[\\]]/g, '').trim();\n      const email    = (leadData.email    || '').replace(/[\\[\\]]/g, '').trim();\n      const telefono = (leadData.telefono || '').replace(/[\\[\\]]/g, '').trim();\n\n      const tieneplaceholders = ['[nombre]','[email]','[telefono]','[nombre real]','[email real]','[telefono real]']\n        .some(p => nombre.toLowerCase() === p || email.toLowerCase() === p || telefono.toLowerCase() === p);\n\n      const esValido = !tieneplaceholders\n        && nombre.length > 1\n        && (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || telefono.replace(/\\D/g, '').length >= 6);\n\n      if (esValido) {\n        if (!cleanOutput) {\n          cleanOutput = `Perfecto, ${nombre}. Ya lo tenemos apuntado, te contactamos en breve. Cualquier duda, aquí estoy.`;\n        }\n        return [{\n          json: {\n            output: cleanOutput,\n            hasLead: true,\n            ...clientMeta,\n            lead: {\n              nombre,\n              email,\n              telefono,\n              producto_interes: (leadData.producto_interes || 'General').replace(/[\\[\\]]/g, '').trim(),\n              contexto:         (leadData.contexto || '').trim(),\n              origen:           (leadData.origen || 'chatbot').trim(),\n              timestamp:        leadData.timestamp || new Date().toISOString()\n            }\n          }\n        }];\n      }\n    }\n  } catch (e) {}\n}\n\nreturn [{ json: { output: cleanOutput || 'Disculpa, ¿en qué más puedo ayudarte?', hasLead: false, ...clientMeta } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3488,
+        -512
+      ],
+      "id": "e473e168-9b2a-49d0-8a1d-f7f81f5dbdc9",
+      "name": "Detectar Lead"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-lead-001",
+              "leftValue": "={{ $json.hasLead }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3264,
+        -512
+      ],
+      "id": "fc835fd9-ec1e-46c2-9730-74e8248dbf7b",
+      "name": "¿Hay Lead?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $json.lead;\nconst prep = $('Preparar Sesion1').first().json;\nreturn [{ json: { lead, clientId: prep.clientId, client_id: prep.client_id, companyName: prep.companyName, company_name: prep.company_name } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3040,
+        -512
+      ],
+      "id": "0826a7cf-53b0-4d92-aeaa-a74d37b97c52",
+      "name": "Preparar Body API1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dev.estratosplus.com/estratos/api/v1/erp/AutomatizacionOportunidadesWs/set_oportunidad",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Content-Type\": \"application/json\",\n  \"x-estratos-api-instance\": \"c0d1df44\",\n  \"x-estratos-api-key\": \"c1544aa59ebd3372531edbeb88c55bda\"\n}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ asunto: 'Demo chatbot: ' + $json.lead.producto_interes, detalle: $json.lead.contexto || '', origen: 'chatbot', erp_campania_comercial_id: '50', cliente: { nombre: $json.lead.nombre, email: $json.lead.email, empresa: '', telefono: $json.lead.telefono } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2832,
+        -512
+      ],
+      "id": "f4df4287-4a34-405a-82d4-975a34ae1e11",
+      "name": "Enviar Lead a API Externa",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Preparar Body API1').first().json.lead;\nconst respuesta = $json;\n\nreturn [{\n  json: {\n    client_id:        $('Preparar Body API1').first().json.clientId || $('Preparar Body API1').first().json.client_id,\n    nombre:           lead.nombre,\n    email:            lead.email,\n    telefono:         lead.telefono,\n    producto_interes: lead.producto_interes || 'General',\n    contexto:         lead.contexto || '',\n    origen:           lead.origen || 'chatbot',\n    estado:           'OK',\n    error_detalle:    null,\n    respuesta_api:    JSON.stringify(respuesta)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2592,
+        -608
+      ],
+      "id": "1be41fa3-acc5-4812-a535-7c288f6d9eda",
+      "name": "Preparar Log OK"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Preparar Body API1').first().json.lead;\nconst error = $json;\n\nlet errorDetalle = '';\ntry {\n  const errObj = typeof error === 'string' ? JSON.parse(error) : error;\n  errorDetalle = errObj.message || errObj.error || JSON.stringify(errObj);\n} catch(e) {\n  errorDetalle = JSON.stringify(error);\n}\n\nreturn [{\n  json: {\n    client_id:        $('Preparar Body API1').first().json.clientId || $('Preparar Body API1').first().json.client_id,\n    nombre:           lead.nombre,\n    email:            lead.email,\n    telefono:         lead.telefono,\n    producto_interes: lead.producto_interes || 'General',\n    contexto:         lead.contexto || '',\n    origen:           lead.origen || 'chatbot',\n    estado:           'ERROR',\n    error_detalle:    errorDetalle,\n    respuesta_api:    null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2592,
+        -432
+      ],
+      "id": "1e0292bd-5198-4569-a308-878091d0480e",
+      "name": "Preparar Log ERROR2"
+    },
+    {
+      "parameters": {
+        "tableId": "lead_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "client_id",
+              "fieldValue": "={{ $json.client_id }}"
+            },
+            {
+              "fieldId": "nombre",
+              "fieldValue": "={{ $json.nombre }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $json.telefono }}"
+            },
+            {
+              "fieldId": "producto_interes",
+              "fieldValue": "={{ $json.producto_interes }}"
+            },
+            {
+              "fieldId": "contexto",
+              "fieldValue": "={{ $json.contexto }}"
+            },
+            {
+              "fieldId": "origen",
+              "fieldValue": "={{ $json.origen }}"
+            },
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ $json.estado }}"
+            },
+            {
+              "fieldId": "error_detalle",
+              "fieldValue": "={{ $json.error_detalle }}"
+            },
+            {
+              "fieldId": "respuesta_api",
+              "fieldValue": "={{ $json.respuesta_api }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -2368,
+        -608
+      ],
+      "id": "93941efc-f8ba-4bac-ba37-aeb9bdf4fe02",
+      "name": "Log OK en Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "lead_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "client_id",
+              "fieldValue": "={{ $json.client_id }}"
+            },
+            {
+              "fieldId": "nombre",
+              "fieldValue": "={{ $json.nombre }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $json.telefono }}"
+            },
+            {
+              "fieldId": "producto_interes",
+              "fieldValue": "={{ $json.producto_interes }}"
+            },
+            {
+              "fieldId": "contexto",
+              "fieldValue": "={{ $json.contexto }}"
+            },
+            {
+              "fieldId": "origen",
+              "fieldValue": "={{ $json.origen }}"
+            },
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ $json.estado }}"
+            },
+            {
+              "fieldId": "error_detalle",
+              "fieldValue": "={{ $json.error_detalle }}"
+            },
+            {
+              "fieldId": "respuesta_api",
+              "fieldValue": "={{ $json.respuesta_api }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -2368,
+        -432
+      ],
+      "id": "bfdffe6d-40ec-458b-ad8b-c595f2cc1c29",
+      "name": "Log ERROR en Supabase2",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $('Preparar Sesion1').first().json;\nconst sessionId = prep.sessionId;\nconst clientId = prep.clientId || prep.client_id || '';\nconst companyName = prep.companyName || prep.company_name || 'la empresa';\nconst logData = $('Preparar Log OK').first().json || {};\n\nconst leadNombre = logData.nombre           || 'Desconocido';\nconst leadEmail  = logData.email            || '';\nconst leadTel    = logData.telefono         || '';\nconst leadProd   = logData.producto_interes || 'General';\nconst leadCtx    = logData.contexto         || '';\n\nreturn [{ json: { sessionId, clientId, client_id: clientId, companyName, company_name: companyName, leadNombre, leadEmail, leadTel, leadProd, leadCtx } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2144,
+        -608
+      ],
+      "id": "e356b738-e1e5-4deb-a0cf-ddc3c9d51fbe",
+      "name": "Preparar Datos Transcript1"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "chat_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "client_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.clientId || $json.client_id }}"
+            },
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.sessionId }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1920,
+        -608
+      ],
+      "id": "d31d1b9d-8f65-455c-8410-b99f421a4d32",
+      "name": "Leer Historial de Supabase1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prepData = $('Preparar Datos Transcript1').first().json;\nconst clientId = prepData.clientId || prepData.client_id || '';\nconst companyName = prepData.companyName || prepData.company_name || 'la empresa';\nconst leadNombre = prepData.leadNombre;\nconst leadEmail  = prepData.leadEmail;\nconst leadTel    = prepData.leadTel;\nconst leadProd   = prepData.leadProd;\nconst leadCtx    = prepData.leadCtx;\n\nconst items = $input.all();\nconst historia = items.map(item => item.json).filter(m => m.role && m.content);\n\nconst now          = new Date();\nconst timestamp    = now.toISOString();\nconst fechaLegible = now.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });\nconst fileTimestamp = timestamp.replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);\n\nfunction esc(str) {\n  return String(str || '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/\\n/g, '<br>');\n}\n\nconst mensajesHtml = historia.length\n  ? historia.map(msg => {\n      const isUser  = msg.role === 'user';\n      const label   = isUser ? '👤 Usuario' : '🤖 Asistente';\n      const bgColor = isUser ? '#EEF2FF' : '#F0FDF4';\n      const border  = isUser ? '#818CF8' : '#4ADE80';\n      const labelClr = isUser ? '#3730A3' : '#166534';\n      const hora    = msg.created_at\n        ? new Date(msg.created_at).toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })\n        : '';\n      return `\n  <div style=\"margin-bottom:14px;padding:14px 18px;background:${bgColor};border-left:4px solid ${border};border-radius:0 8px 8px 0;\">\n    <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;\">\n      <span style=\"font-size:11px;font-weight:700;color:${labelClr};text-transform:uppercase;letter-spacing:.05em;\">${label}</span>\n      ${hora ? `<span style=\"font-size:11px;color:#9CA3AF;\">${hora}</span>` : ''}\n    </div>\n    <div style=\"font-size:14px;line-height:1.7;color:#1F2937;\">${esc(msg.content)}</div>\n  </div>`;\n    }).join('')\n  : '<p style=\"color:#6B7280;font-style:italic;\">No hay mensajes en el historial.</p>';\n\nconst fichaLead = `\n  <div style=\"margin-top:28px;padding:18px 20px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;\">\n    <div style=\"font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;\">📋 Datos del lead capturado</div>\n    <table style=\"width:100%;border-collapse:collapse;font-size:13px;\">\n      <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;width:130px;\">Nombre</td><td style=\"padding:5px 0;color:#111827;font-weight:500;\">${esc(leadNombre)}</td></tr>\n      <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Email</td><td style=\"padding:5px 0;color:#111827;\">${esc(leadEmail)}</td></tr>\n      <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Teléfono</td><td style=\"padding:5px 0;color:#111827;\">${esc(leadTel)}</td></tr>\n      <tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Producto</td><td style=\"padding:5px 0;color:#111827;\">${esc(leadProd)}</td></tr>\n      ${leadCtx ? `<tr><td style=\"padding:5px 12px 5px 0;color:#6B7280;\">Contexto</td><td style=\"padding:5px 0;color:#111827;\">${esc(leadCtx)}</td></tr>` : ''}\n    </table>\n  </div>`;\n\nconst html = `<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">\n  <title>Transcript – Aicor Chatbot</title>\n  <style>\n    *{box-sizing:border-box;margin:0;padding:0}\n    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F9FAFB;color:#111827;padding:32px 16px}\n    .wrap{max-width:780px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.12);overflow:hidden}\n    .hdr{background:linear-gradient(135deg,#1E40AF,#2563EB);color:#fff;padding:28px 32px}\n    .hdr h1{font-size:20px;font-weight:600;margin-bottom:8px}\n    .hdr p{font-size:13px;opacity:.85;line-height:1.8;margin:0}\n    .body{padding:28px 32px}\n    .sec{font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #E5E7EB}\n    .foot{background:#F3F4F6;padding:14px 32px;font-size:11px;color:#9CA3AF;border-top:1px solid #E5E7EB}\n  </style>\n</head>\n<body>\n  <div class=\"wrap\">\n    <div class=\"hdr\">\n      <h1>📋 Transcript de conversación</h1>\n      <p>\n        🕐 ${fechaLegible}<br>\n        👤 Lead: ${esc(leadNombre)}${leadEmail ? ' &lt;' + esc(leadEmail) + '&gt;' : ''}<br>\n        📨 Total mensajes: ${historia.length}\n      </p>\n    </div>\n    <div class=\"body\">\n      <div class=\"sec\">Conversación completa</div>\n      ${mensajesHtml}\n      ${fichaLead}\n    </div>\n    <div class=\"foot\">Generado automáticamente por Aicor Chatbot &middot; ${timestamp}</div>\n  </div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    html_content:  html,\n    file_name:     `transcript_${fileTimestamp}.html`,\n    client_id:     clientId,\n    company_name:  companyName,\n    lead_nombre:   leadNombre,\n    lead_email:    leadEmail,\n    created_at:    timestamp,\n    message_count: historia.length,\n    storage_path:  `chatbot/${clientId}/transcript_${fileTimestamp}.html`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        -608
+      ],
+      "id": "bddae1c4-4292-4e93-8bd8-67e0827e0f0f",
+      "name": "Generate HTML Transcript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://uovfdghgbanhjojtobtz.supabase.co/storage/v1/object/transcripts/{{ $json.storage_path }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Authorization\": \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvdmZkZ2hnYmFuaGpvanRvYnR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzUzMzY3OCwiZXhwIjoyMDkzMTA5Njc4fQ.MCH7Gisb0xbo-H7m2GugydXDlH-feiaFUiWePzfrKdM\",\n  \"Content-Type\": \"text/html; charset=utf-8\",\n  \"x-upsert\": \"true\"\n}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/html; charset=utf-8",
+        "body": "={{ $json.html_content }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1472,
+        -608
+      ],
+      "id": "bb283e05-50bc-4225-8111-6c9f1c138345",
+      "name": "Upload to Supabase",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uploadResponse = $json;\nconst prevData = $('Generate HTML Transcript').first().json;\nconst storagePath = prevData.storage_path;\nconst publicUrl   = `https://uovfdghgbanhjojtobtz.supabase.co/storage/v1/object/public/transcripts/${storagePath}`;\nconst uploadOk    = uploadResponse.statusCode >= 200 && uploadResponse.statusCode < 300;\n\nreturn [{\n  json: {\n    client_id:       prevData.client_id,\n    file_url:        uploadOk ? publicUrl : null,\n    storage_path:    storagePath,\n    file_name:       prevData.file_name,\n    lead_nombre:     prevData.lead_nombre,\n    lead_email:      prevData.lead_email,\n    message_count:   prevData.message_count,\n    created_at:      prevData.created_at,\n    upload_status:   uploadOk ? 'OK' : 'ERROR',\n    upload_response: JSON.stringify(uploadResponse)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1248,
+        -624
+      ],
+      "id": "a41d8c3d-e7a1-4ed2-b557-eaf2fb982a0b",
+      "name": "Prepare Transcript Metadata"
+    },
+    {
+      "parameters": {
+        "tableId": "transcript_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "client_id",
+              "fieldValue": "={{ $json.client_id }}"
+            },
+            {
+              "fieldId": "file_url",
+              "fieldValue": "={{ $json.file_url }}"
+            },
+            {
+              "fieldId": "storage_path",
+              "fieldValue": "={{ $json.storage_path }}"
+            },
+            {
+              "fieldId": "file_name",
+              "fieldValue": "={{ $json.file_name }}"
+            },
+            {
+              "fieldId": "lead_nombre",
+              "fieldValue": "={{ $json.lead_nombre }}"
+            },
+            {
+              "fieldId": "lead_email",
+              "fieldValue": "={{ $json.lead_email }}"
+            },
+            {
+              "fieldId": "message_count",
+              "fieldValue": "={{ $json.message_count }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "upload_status",
+              "fieldValue": "={{ $json.upload_status }}"
+            },
+            {
+              "fieldId": "upload_response",
+              "fieldValue": "={{ $json.upload_response }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1088,
+        -624
+      ],
+      "id": "393fe046-2356-4123-baba-d1621065ca13",
+      "name": "Save Transcript Metadata",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"output\": \"Perfecto, {{ $('Construir Body BlueCRM1').item.json.body.name }}. Ya lo tenemos apuntado, te contactamos en breve. Cualquier duda, aquí estoy.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        64,
+        -624
+      ],
+      "id": "22b2d8ae-6260-482d-9d83-0a9763cb1af6",
+      "name": "Respuesta Final OK1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"output\": \"He recibido tus datos, pero ahora mismo no he podido registrarlos bien. ¿Puedes intentarlo en unos minutos?\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2144,
+        -432
+      ],
+      "id": "c1baebf0-7c81-4be7-b158-c74c869e270f",
+      "name": "Respuesta Error2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const clientId = $json.clientId || $json.client_id || '';\nconst companyName = $json.companyName || $json.company_name || 'la empresa';\nconst sessionId = $json.sessionId || (clientId + ':' + ($execution?.id || 'default'));\nconst userMsg   = ($json.userMsg || '').trim();\nconst msgLower  = userMsg.toLowerCase();\n\nconst BANNED_DOMAINS = [\n  'bit.ly', 'tinyurl.com', 'cutt.ly', 'shorturl.at',\n  'ow.ly', 't.co', 'rebrand.ly', 'bl.ink',\n  'onlyfans.com', 'xvideos.com', 'pornhub.com',\n  'casino', 'bet365', 'betfair',\n  'phishing-site.com'\n];\n\nconst BLOCKED_PATTERNS = [\n  /\\b(puta|puto|coño|hostia|gilipollas|imbécil|idiota|estupido|subnormal|retrasado|mongolo|maricón|zorra|perra|bastardo|cabrón|hdp|hijo de puta|mierda de empresa|asco de empresa)\\b/i,\n  /\\b(te voy a|os voy a|voy a|te vas a|os vais a).{0,30}(matar|pegar|hundir|denunciar|destruir|arruinar|reventar|joder)\\b/i,\n  /\\b(amenaza|amenazas|te arrepentirás|me las pagarás|ya verás|os arrepentiréis)\\b/i,\n  /\\b(buy now|click here|free money|earn (fast|easy|quick)|guaranteed income|work from home|make money fast|crypto investment|double your|100% profit|exclusive offer|limited time offer|act now)\\b/i,\n  /\\b(viagra|cialis|levitra|casino|jackpot|slot machine|free spin|win big|lottery winner|you have been selected)\\b/i,\n  /\\b(ignore (previous|all|your) (instructions?|rules?|prompt)|forget (your|the) (instructions?|rules?|context)|act as (dan|jailbreak|unrestricted|evil)|pretend (you are|to be) (without|no) (restrictions?|limits?|rules?))\\b/i,\n  /https?:\\/\\/[^\\s]{60,}/i,\n  /\\b(\\d{1,3}\\.){3}\\d{1,3}\\b/\n];\n\nconst urlsEnMensaje = msgLower.match(/https?:\\/\\/[^\\s]+|www\\.[^\\s]+|[a-z0-9.-]+\\.(com|es|net|org|io|co|info|biz|xyz|top|club|site|online|shop|store)[^\\s]*/gi) || [];\nconst dominiosBloqueados = urlsEnMensaje.some(url => BANNED_DOMAINS.some(domain => url.includes(domain)));\nconst msgDemasiadoLargo = userMsg.length > 800;\n\nlet bloqueado = false;\nlet motivoBloqueo = '';\n\nif (dominiosBloqueados) { bloqueado = true; motivoBloqueo = 'dominio_baneado'; }\nelse if (BLOCKED_PATTERNS.some(p => p.test(userMsg))) { bloqueado = true; motivoBloqueo = 'contenido_bloqueado'; }\nelse if (msgDemasiadoLargo) { bloqueado = true; motivoBloqueo = 'mensaje_excesivo'; }\n\nconst respuestasBloqueo = {\n  dominio_baneado:    'Lo siento, no puedo procesar mensajes con ese tipo de enlaces.',\n  contenido_bloqueado:'Por favor, mantén un tono respetuoso para que pueda ayudarte.',\n  mensaje_excesivo:   'El mensaje es demasiado largo. ¿Puedes resumir tu consulta en pocas frases?'\n};\n\nreturn [{ json: { ...$json, clientId, client_id: clientId, companyName, company_name: companyName, sessionId, userMsg, bloqueado, motivoBloqueo, respuestaBloqueo: bloqueado ? (respuestasBloqueo[motivoBloqueo] || 'Mensaje no permitido.') : null } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5296,
+        -496
+      ],
+      "id": "bf162ca0-a949-4612-b5a6-1b5d707c3943",
+      "name": "Filtro de Intención1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-bloqueado-001",
+              "leftValue": "={{ $json.bloqueado }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -5088,
+        -496
+      ],
+      "id": "ade604e1-4e53-4e27-bce9-26131e8e1dc6",
+      "name": "¿Mensaje Permitido?1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ { \"output\": $json.respuestaBloqueo } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4768,
+        -304
+      ],
+      "id": "e403c70e-b932-4699-a500-cf41c5cf343a",
+      "name": "Respuesta Bloqueado1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json || {};\nconst query = raw.query || {};\nconst body = raw.body || {};\nconst metadata = raw.metadata || {};\n\nconst rawSessionId = raw.sessionId || body.sessionId || query.sessionId || $execution?.id || 'default';\nconst userMsg = (\n  raw.chatInput ||\n  raw.message ||\n  raw.text ||\n  body.chatInput ||\n  body.message ||\n  ''\n).trim();\n\nconst clientId = String(\n  raw.client_id ||\n  raw.clientId ||\n  body.client_id ||\n  body.clientId ||\n  query.client_id ||\n  query.clientId ||\n  metadata.client_id ||\n  ''\n).trim();\n\nconst companyName = String(\n  raw.company_name ||\n  raw.companyName ||\n  raw.empresa ||\n  body.company_name ||\n  body.companyName ||\n  query.company_name ||\n  query.companyName ||\n  metadata.company_name ||\n  'la empresa'\n).trim();\n\nif (!clientId) throw new Error('client_id es obligatorio para aislar el chatbot por cliente');\n\nconst sessionId = `${clientId}:${rawSessionId}`;\n\nreturn [{ json: { ...raw, sessionId, rawSessionId, userMsg, clientId, client_id: clientId, companyName, company_name: companyName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5504,
+        -496
+      ],
+      "id": "62e944bc-8ed1-4618-9d67-c1156307302d",
+      "name": "Extraer Datos Entrada1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://crm.blueaicor.com/api/Account/login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"email\": \"admindemoblueaibot@blueaicor.com\",\n  \"password\": \"Aicor2026\" \n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -864,
+        -624
+      ],
+      "id": "4e11e10d-1604-43dd-be48-540e11e22bdc",
+      "name": "Login"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://crm.blueaicor.com/api/Lead/pipelines",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Authorization\": \"Bearer {{ $json.data.token }}\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"workspace_id\":{{ $json.data.user.active_workspace }} \n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -640,
+        -624
+      ],
+      "id": "1612120b-640c-423a-ac1a-d42e643daae2",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Token y workspace desde Login ──────────────────────────\nconst loginJson   = $('Login').first().json;\nconst token       = loginJson.data.token;\nconst workspaceId = loginJson.data.user.active_workspace;\n\n// ── Pipeline ID: primer pipeline de la lista ───────────────\nconst pipelineId  = $input.first().json.data[0].id;\n\n// ── Datos del lead ──────────────────────────────────────────\nconst lead = $('Preparar Body API1').first().json.lead;\n\n// ── follow_up_date: hoy en formato YYYY-MM-DD ───────────────\nconst d = new Date();\nconst followUpDate = d.toISOString().split('T')[0];\n\nconst body = {\n  workspace_id:   workspaceId,\n  pipeline_id:    pipelineId,\n  name:           lead.nombre   || '',\n  email:          lead.email    || '',\n  subject:        lead.contexto || ('Lead chatbot: ' + (lead.producto_interes || 'General')),\n  phone:          lead.telefono || '',\n  follow_up_date: followUpDate\n};\n\nreturn [{ json: { token, body, bodyString: JSON.stringify(body) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        -624
+      ],
+      "id": "bcd9cc9e-8904-455e-aa97-bae06028e01f",
+      "name": "Construir Body BlueCRM1"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "¡Hola! Soy el asistente virtual.\n¿Cómo te llamas?",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -5776,
+        -496
+      ],
+      "id": "53db5f6e-f35e-4bcc-a847-fc2ee419c7f3",
+      "name": "When chat message received",
+      "webhookId": "48e4053f-83ac-471e-880e-91f47e39b0ee"
+    }
+  ],
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Final OK1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Sesion1": {
+      "main": [
+        [
+          {
+            "node": "Guardar Mensaje Usuario1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Mensaje Usuario1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Preparar Respuesta Agente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings HuggingFace Inference": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Respuesta Agente1": {
+      "main": [
+        [
+          {
+            "node": "Guardar Respuesta Agente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Respuesta Agente1": {
+      "main": [
+        [
+          {
+            "node": "Detectar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar Lead": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Lead?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Body API1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Body API1": {
+      "main": [
+        [
+          {
+            "node": "Enviar Lead a API Externa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Lead a API Externa": {
+      "main": [
+        [
+          {
+            "node": "Preparar Log ERROR2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Log OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Log OK": {
+      "main": [
+        [
+          {
+            "node": "Log OK en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Log ERROR2": {
+      "main": [
+        [
+          {
+            "node": "Log ERROR en Supabase2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log OK en Supabase": {
+      "main": [
+        [
+          {
+            "node": "Preparar Datos Transcript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log ERROR en Supabase2": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Error2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Datos Transcript1": {
+      "main": [
+        [
+          {
+            "node": "Leer Historial de Supabase1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Historial de Supabase1": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Transcript": {
+      "main": [
+        [
+          {
+            "node": "Upload to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Transcript Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Transcript Metadata": {
+      "main": [
+        [
+          {
+            "node": "Save Transcript Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Transcript Metadata": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtro de Intención1": {
+      "main": [
+        [
+          {
+            "node": "¿Mensaje Permitido?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Mensaje Permitido?1": {
+      "main": [
+        [
+          {
+            "node": "Preparar Sesion1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta Bloqueado1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos Entrada1": {
+      "main": [
+        [
+          {
+            "node": "Filtro de Intención1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Construir Body BlueCRM1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Body BlueCRM1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos Entrada1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "83a0c81df85bf9376c9bd1175d07d72f656f294b92807431b3b09acbaccc6d0b"
+  }
+}

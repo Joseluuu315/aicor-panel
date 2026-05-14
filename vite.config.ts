@@ -9,6 +9,11 @@ export default defineConfig({
         target: 'https://n8n.averonix.org',
         changeOrigin: true,
         secure: true,
+      },
+      '/webhook-test': {
+        target: 'https://n8n.averonix.org',
+        changeOrigin: true,
+        secure: true,
       }
     }
   }

@@ -1,0 +1,501 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scraper-run",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "3ce570f8-a021-42cb-aa39-3b228c285930",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -416,
+        -1200
+      ],
+      "typeVersion": 2,
+      "webhookId": "scraper-run"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst body = raw.body ?? raw;\nconst rawUrls = body.urls ?? [];\nconst executionId = $execution?.id ?? Date.now().toString();\n\nconst clientId = String(body.client_id || body.clientId || '').trim();\nconst companyName = String(body.company_name || body.companyName || body.empresa || '').trim();\n\nif (!clientId) throw new Error('client_id es obligatorio');\nif (!companyName) throw new Error('company_name es obligatorio');\n\nconst urls = [...new Set((Array.isArray(rawUrls) ? rawUrls : [rawUrls])\n  .map(u => String(u).trim())\n  .filter(Boolean))];\n\nif (urls.length === 0) throw new Error('Debes enviar al menos una URL');\nif (urls.length > 2) throw new Error('Solo se permiten 2 URLs por cliente');\n\nconst normalized = urls.map((url) => {\n  let parsed;\n  try { parsed = new URL(url); } catch (e) { throw new Error(`URL no valida: ${url}`); }\n  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(`Protocolo no permitido: ${url}`);\n  const domain = parsed.hostname.replace(/^www\\./, '').toLowerCase();\n  if (!/\\.(com|es)$/.test(domain)) throw new Error(`Solo se permiten dominios .com o .es: ${domain}`);\n  return { url: parsed.href, domain };\n});\n\nreturn normalized.map(({ url, domain }) => ({\n  json: { url, rootUrl: url, rootDomain: domain, executionId, clientId, companyName }\n}));"
+      },
+      "id": "63771658-fbb1-4d9e-ac45-be4a071043b6",
+      "name": "0. Parsear URLs",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -192,
+        -1200
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "3feddc21-dd81-4d89-86ae-5646108f5827",
+      "name": "1. Obtener Home",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        48,
+        -1200
+      ],
+      "typeVersion": 4.1,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('0. Parsear URLs').item.json;\nreturn [{\n  json: {\n    ...$json,\n    url: parsed.url,\n    rootUrl: parsed.rootUrl,\n    rootDomain: parsed.rootDomain,\n    executionId: parsed.executionId,\n    clientId: parsed.clientId,\n    companyName: parsed.companyName\n  }\n}];"
+      },
+      "id": "d65ede65-4c90-4fa1-ae32-1c9c5c21dd5b",
+      "name": "1b. Mantener URL",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        272,
+        -1200
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "urls",
+              "cssSelector": "a",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "45444c3e-fb36-4db1-94d7-44da83d3af62",
+      "name": "2. Extraer Enlaces",
+      "type": "n8n-nodes-base.html",
+      "position": [
+        496,
+        -1200
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const allUrls = $json.urls || [];\nconst rootUrl = $json.rootUrl || $json.url || '';\nconst rootDomain = ($json.rootDomain || '').toLowerCase();\nconst executionId = $json.executionId || '';\nconst clientId = $json.clientId || '';\nconst companyName = $json.companyName || '';\n\nconst cleanUrls = [...new Set(allUrls)]\n  .map((href) => {\n    try { return new URL(String(href), rootUrl); } catch (e) { return null; }\n  })\n  .filter(Boolean)\n  .filter((u) => ['http:', 'https:'].includes(u.protocol))\n  .filter((u) => u.hostname.replace(/^www\\./, '').toLowerCase() === rootDomain)\n  .filter((u) => /\\.(com|es)$/.test(u.hostname.replace(/^www\\./, '').toLowerCase()))\n  .filter((u) => !u.hash)\n  .filter((u) => !u.href.match(/\\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|rar|mp4|mp3)$/i))\n  .filter((u) => !u.href.includes('@'))\n  .slice(0, 25);\n\nreturn cleanUrls.map((u) => ({\n  json: { url: u.href, rootUrl, rootDomain, executionId, clientId, companyName }\n}));"
+      },
+      "id": "a2b9277f-b2b9-4c0d-b55f-3007acd75ecc",
+      "name": "3. Limpiar y Filtrar",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        720,
+        -1200
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "fbc24711-0124-4cbd-b392-d3c3ac1a516d",
+      "name": "4. Visitar Cada URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        944,
+        -1200
+      ],
+      "typeVersion": 4.1,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "13590080-2465-4cb0-b303-9cae89a5ce7b",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1168,
+        -1200
+      ],
+      "id": "b8f327c9-04d5-4c9f-b24b-3aa7a7067a49",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "contenido",
+              "cssSelector": "article, .elementor-section, p",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "99bc0b26-2fc9-43b4-a051-bcf7e6b466be",
+      "name": "5. Extraer Datos Subpágina",
+      "type": "n8n-nodes-base.html",
+      "position": [
+        1392,
+        -1216
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('3. Limpiar y Filtrar').item.json;\nconst contenidoRaw = $json.contenido || [];\nconst contenidoLimpio = contenidoRaw\n  .join(' ')\n  .replace(/<[^>]*>?/gm, '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn {\n  json: {\n    url: source.url || '',\n    rootUrl: source.rootUrl || '',\n    rootDomain: source.rootDomain || '',\n    executionId: source.executionId || '',\n    client_id: source.clientId || '',\n    company_name: source.companyName || '',\n    contenido: contenidoLimpio\n  }\n};"
+      },
+      "id": "e0610b5d-a50c-4a6c-b286-b8c16eed3df9",
+      "name": "6. Formatear Todo",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1616,
+        -1216
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "soLBtGZg3F3WdT2z",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/soLBtGZg3F3WdT2z",
+          "cachedResultName": "Aicor Order Data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contenidoScrapping": "={{ $json.contenido }}",
+            "client_id": "={{ $json.client_id }}",
+            "company_name": "={{ $json.company_name }}",
+            "source_url": "={{ $json.url }}",
+            "execution_id": "={{ $json.executionId }}"
+          },
+          "matchingColumns": [
+            "contenidoScrapping",
+            "client_id",
+            "company_name",
+            "source_url",
+            "execution_id"
+          ],
+          "schema": [
+            {
+              "id": "contenidoScrapping",
+              "displayName": "contenidoScrapping",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "company_name",
+              "displayName": "company_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "source_url",
+              "displayName": "source_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1840,
+        -1216
+      ],
+      "id": "3ac836bf-516c-4d0c-9373-7eb91d77efa8",
+      "name": "Execute Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const formatted = $('6. Formatear Todo').all().map(item => item.json);\nconst results = formatted.map(item => ({\n  url: item.url || '',\n  status: 'done',\n  chars: (item.contenido || '').length,\n  client_id: item.client_id || '',\n  company_name: item.company_name || ''\n}));\n\nreturn [{\n  json: {\n    ok: true,\n    client_id: results[0]?.client_id || '',\n    company_name: results[0]?.company_name || '',\n    total: results.length,\n    results\n  }\n}];"
+      },
+      "id": "6c64d478-9954-440d-8ee5-7119886efc10",
+      "name": "7. Collect Results",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2064,
+        -1216
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "1eac2dd3-3b8a-47eb-8b8b-7740b9fc9cc6",
+      "name": "8. Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        2288,
+        -1216
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\":false,\"error\":\"URL no disponible o error HTTP\"}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "0cf0e481-9264-49cb-b463-87d39332b404",
+      "name": "8b. Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1392,
+        -1040
+      ],
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "0. Parsear URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "0. Parsear URLs": {
+      "main": [
+        [
+          {
+            "node": "1. Obtener Home",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Obtener Home": {
+      "main": [
+        [
+          {
+            "node": "1b. Mantener URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1b. Mantener URL": {
+      "main": [
+        [
+          {
+            "node": "2. Extraer Enlaces",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Extraer Enlaces": {
+      "main": [
+        [
+          {
+            "node": "3. Limpiar y Filtrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Limpiar y Filtrar": {
+      "main": [
+        [
+          {
+            "node": "4. Visitar Cada URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Visitar Cada URL": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "5. Extraer Datos Subpágina",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8b. Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Extraer Datos Subpágina": {
+      "main": [
+        [
+          {
+            "node": "6. Formatear Todo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Formatear Todo": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "7. Collect Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Collect Results": {
+      "main": [
+        [
+          {
+            "node": "8. Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "83a0c81df85bf9376c9bd1175d07d72f656f294b92807431b3b09acbaccc6d0b"
+  }
+}

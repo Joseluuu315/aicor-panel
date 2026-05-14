@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 
 const CHAT_URL =
-  "https://n8n.averonix.org/webhook/48e4053f-83ac-471e-880e-91f47e39b0ee/chat";
+  "/webhook/48e4053f-83ac-471e-880e-91f47e39b0ee/chat";
+
+const DEFAULT_CLIENT_ID = import.meta.env.VITE_DEFAULT_CLIENT_ID || "";
+const DEFAULT_COMPANY_NAME = import.meta.env.VITE_DEFAULT_COMPANY_NAME || "Aicor";
 
 // ─── tiny hook: staggered mount animation ───────────────────
 function useReveal(delay = 0) {
@@ -16,6 +19,8 @@ function useReveal(delay = 0) {
 export function ExamplePage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID);
+  const [companyName, setCompanyName] = useState(DEFAULT_COMPANY_NAME);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const hero = useReveal(80);
@@ -25,14 +30,22 @@ export function ExamplePage() {
   const cta = useReveal(560);
   const cards = useReveal(680);
 
+  const chatUrl = `${CHAT_URL}?client_id=${encodeURIComponent(clientId.trim())}&company_name=${encodeURIComponent(companyName.trim())}`;
+
   // lazy-load iframe src on first open
   const handleToggle = () => {
     setChatOpen((prev) => !prev);
     if (!iframeLoaded && iframeRef.current) {
-      iframeRef.current.src = CHAT_URL;
+      iframeRef.current.src = chatUrl;
       setIframeLoaded(true);
     }
   };
+
+  useEffect(() => {
+    if (iframeLoaded && iframeRef.current) {
+      iframeRef.current.src = chatUrl;
+    }
+  }, [chatUrl, iframeLoaded]);
 
   return (
     <>
@@ -404,6 +417,23 @@ export function ExamplePage() {
           padding: 4px 10px;
           border-radius: 6px;
         }
+        .client-fields {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          max-width: 520px;
+          margin-bottom: 20px;
+        }
+        .client-fields input {
+          width: 100%;
+          border: 1px solid var(--cream);
+          border-radius: 8px;
+          background: #fff;
+          color: var(--ink);
+          font: inherit;
+          font-size: 13px;
+          padding: 11px 12px;
+        }
         .demo-iframe-wrapper {
           border-radius: 16px;
           overflow: hidden;
@@ -484,6 +514,7 @@ export function ExamplePage() {
           .hero-left { padding: 48px 28px; }
           .features { grid-template-columns: 1fr; padding: 48px 28px; }
           .demo-section { grid-template-columns: 1fr; padding: 0 28px 48px; }
+          .client-fields { grid-template-columns: 1fr; }
           .nav { padding: 14px 24px; }
           footer { padding: 24px; flex-direction: column; gap: 8px; text-align: center; }
           .float-panel { width: calc(100vw - 24px); right: 12px; bottom: 96px; }
@@ -608,10 +639,22 @@ export function ExamplePage() {
             lazy y no impacta el rendimiento de la página.
           </p>
           <p>
-            El iframe apunta a tu webhook de n8n —{" "}
-            <span className="code-tag">allowedOrigins: "*"</span> ya está
-            configurado para que funcione desde cualquier dominio.
+            El iframe apunta a una ruta de esta web —{" "}
+            <span className="code-tag">/webhook/.../chat</span> se reenvía
+            internamente al flujo de n8n.
           </p>
+          <div className="client-fields">
+            <input
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="ID cliente Supabase"
+            />
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Nombre empresa"
+            />
+          </div>
           <button className="btn-primary" onClick={handleToggle} style={{ marginTop: 8 }}>
             <span>💬</span>
             Abrir chat flotante
@@ -621,7 +664,7 @@ export function ExamplePage() {
         {/* Live inline iframe */}
         <div className="demo-iframe-wrapper">
           <iframe
-            src={CHAT_URL}
+            src={chatUrl}
             title="Demo Aicor Chat"
             allow="microphone"
           />

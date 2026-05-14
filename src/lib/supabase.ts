@@ -24,6 +24,7 @@ export interface BotConfig {
 
 export interface LeadLog {
   id: string
+  client_id: string | null
   nombre: string
   email: string
   telefono: string
@@ -38,6 +39,7 @@ export interface LeadLog {
 
 export interface TranscriptLog {
   id: string
+  client_id: string | null
   file_url: string | null
   storage_path: string
   file_name: string
@@ -51,6 +53,7 @@ export interface TranscriptLog {
 
 export interface ChatSession {
   id: string
+  client_id: string | null
   session_id: string
   role: 'user' | 'assistant'
   content: string

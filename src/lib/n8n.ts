@@ -1,4 +1,4 @@
-const WEBHOOK_URL = import.meta.env.VITE_N8N_CONFIG_WEBHOOK || 'https://n8n.averonix.org/webhook-test/bot-config-update'
+const WEBHOOK_URL = '/webhook-test/bot-config-update'
 
 export interface ConfigUpdatePayload {
   action: 'update_config' | 'reload_prompt' | 'update_endpoint' | 'update_transcript_format'

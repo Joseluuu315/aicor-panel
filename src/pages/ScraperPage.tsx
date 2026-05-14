@@ -41,6 +41,8 @@ function elapsed(start: Date, end?: Date) {
 
 export function ScraperPage() {
     const [urlInput, setUrlInput] = useState("");
+    const [clientId, setClientId] = useState("");
+    const [companyName, setCompanyName] = useState("");
     const [jobs, setJobs] = useState<Job[]>([]);
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
@@ -61,11 +63,44 @@ export function ScraperPage() {
     }, []);
 
     const parseUrls = (raw: string): string[] =>
-        raw.split(/[\n,]+/).map((u) => u.trim()).filter((u) => u.startsWith("http"));
+        raw.split(/[\n,]+/)
+            .map((u) => u.trim())
+            .filter((u) => u.startsWith("http"))
+            .filter((u, i, arr) => arr.indexOf(u) === i);
+
+    const validateUrls = (urls: string[]) => {
+        if (urls.length === 0) return "Introduce al menos una URL.";
+        if (urls.length > 2) return "Solo puedes scrapear 2 URLs por cliente.";
+
+        for (const url of urls) {
+            try {
+                const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+                if (!/\.(com|es)$/.test(host)) {
+                    return "Solo se permiten dominios terminados en .com o .es.";
+                }
+            } catch {
+                return "Hay una URL no valida.";
+            }
+        }
+
+        return null;
+    };
 
     const runScraper = async () => {
         const urls = parseUrls(urlInput);
-        if (!urls.length) return;
+        const validationError = validateUrls(urls);
+        if (validationError) {
+            alert(validationError);
+            return;
+        }
+
+        const cleanClientId = clientId.trim();
+        const cleanCompanyName = companyName.trim();
+
+        if (!cleanClientId || !cleanCompanyName) {
+            alert("Indica el ID del cliente y el nombre de la empresa antes de scrapear.");
+            return;
+        }
 
         const jobId = uid();
         const job: Job = {
@@ -101,7 +136,11 @@ export function ScraperPage() {
             const res = await fetch(N8N_WEBHOOK_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ urls }),
+                body: JSON.stringify({
+                    client_id: cleanClientId,
+                    company_name: cleanCompanyName,
+                    urls
+                }),
             });
 
             let data: any = {};
@@ -274,6 +313,24 @@ export function ScraperPage() {
                 <main className="main">
                     <div className="input-area">
                         <div className="input-label">// URLs a scrapear</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <input
+                                className="url-textarea"
+                                style={{ minHeight: 0, resize: "none" }}
+                                placeholder="ID cliente Supabase"
+                                value={clientId}
+                                onChange={(e) => setClientId(e.target.value)}
+                                disabled={running}
+                            />
+                            <input
+                                className="url-textarea"
+                                style={{ minHeight: 0, resize: "none" }}
+                                placeholder="Nombre empresa"
+                                value={companyName}
+                                onChange={(e) => setCompanyName(e.target.value)}
+                                disabled={running}
+                            />
+                        </div>
                         <textarea
                             className="url-textarea"
                             placeholder={"https://aicor.com/\nhttps://blueaicor.com/servicios\nhttps://blueaicor.com/productos"}
@@ -283,9 +340,9 @@ export function ScraperPage() {
                         />
                         <div className="input-footer">
                             <div className="url-count">
-                                <span>{parseUrls(urlInput).length}</span> URL{parseUrls(urlInput).length !== 1 ? "s" : ""} detectada{parseUrls(urlInput).length !== 1 ? "s" : ""}{" · una por línea o separadas por coma"}
+                                <span>{parseUrls(urlInput).length}</span>/2 URL{parseUrls(urlInput).length !== 1 ? "s" : ""} detectada{parseUrls(urlInput).length !== 1 ? "s" : ""}{" · solo dominios .com o .es"}
                             </div>
-                            <button className="run-btn" disabled={running || parseUrls(urlInput).length === 0} onClick={runScraper}>
+                            <button className="run-btn" disabled={running || parseUrls(urlInput).length === 0 || parseUrls(urlInput).length > 2} onClick={runScraper}>
                                 {running ? <><span className="spinner" /> PROCESANDO…</> : <>▶ EJECUTAR SCRAPING</>}
                             </button>
                         </div>

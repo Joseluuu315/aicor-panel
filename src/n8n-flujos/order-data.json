@@ -1,0 +1,208 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "contenidoScrapping"
+            },
+            {
+              "name": "client_id"
+            },
+            {
+              "name": "company_name"
+            },
+            {
+              "name": "source_url"
+            },
+            {
+              "name": "execution_id"
+            }
+          ]
+        }
+      },
+      "id": "c055762a-8fe7-4141-a639-df2372f30060",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        368,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const clientId = String(item.json.client_id || '').trim();\n  if (!clientId) throw new Error('client_id es obligatorio para vectorizar documentos');\n\n  return {\n    json: {\n      markdown: item.json.contenidoScrapping || '',\n      client_id: clientId,\n      company_name: item.json.company_name || '',\n      source_url: item.json.source_url || '',\n      execution_id: item.json.execution_id || ''\n    }\n  };\n});"
+      },
+      "id": "fbd5df93-decb-4f7a-81b0-a443b81acafd",
+      "name": "Transformar a Markdown",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        656,
+        288
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "value": "documents",
+          "mode": "list"
+        },
+        "options": {
+          "queryName": "match_documents"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1,
+      "position": [
+        880,
+        288
+      ],
+      "id": "a459259d-6c54-472f-90a0-37bd4192c142",
+      "name": "Vectorizar",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Nn0VgGHP4LJgHBd2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "client_id",
+                "value": "={{ $json.client_id }}"
+              },
+              {
+                "name": "company_name",
+                "value": "={{ $json.company_name }}"
+              },
+              {
+                "name": "source_url",
+                "value": "={{ $json.source_url }}"
+              },
+              {
+                "name": "execution_id",
+                "value": "={{ $json.execution_id }}"
+              },
+              {
+                "name": "source",
+                "value": "website_scraping"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        496
+      ],
+      "id": "2df69722-2ed5-4266-bb79-00665eb73503",
+      "name": "Document Loader"
+    },
+    {
+      "parameters": {
+        "chunkSize": 1200,
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        704
+      ],
+      "id": "ceac6eed-427e-440a-83f7-058144ccbbd8",
+      "name": "Text Splitter"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        928,
+        496
+      ],
+      "id": "9b152a9a-08e1-443e-a34e-b8268acfb540",
+      "name": "Embeddings HuggingFace Inference",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "MyTArumvnxPB54oE",
+          "name": "HuggingFaceApi account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Transformar a Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transformar a Markdown": {
+      "main": [
+        [
+          {
+            "node": "Vectorizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Vectorizar",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Document Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings HuggingFace Inference": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Vectorizar",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "83a0c81df85bf9376c9bd1175d07d72f656f294b92807431b3b09acbaccc6d0b"
+  }
+}
