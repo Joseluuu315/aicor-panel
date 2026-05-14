@@ -9,26 +9,26 @@
           "allowedOrigins": "*"
         }
       },
-      "id": "3ce570f8-a021-42cb-aa39-3b228c285930",
+      "id": "551bd473-d81d-4948-a40d-f2dc70faeac7",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "position": [
-        -416,
-        -1200
+        -560,
+        -928
       ],
       "typeVersion": 2,
       "webhookId": "scraper-run"
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.first().json;\nconst body = raw.body ?? raw;\nconst rawUrls = body.urls ?? [];\nconst executionId = $execution?.id ?? Date.now().toString();\n\nconst clientId = String(body.client_id || body.clientId || '').trim();\nconst companyName = String(body.company_name || body.companyName || body.empresa || '').trim();\n\nif (!clientId) throw new Error('client_id es obligatorio');\nif (!companyName) throw new Error('company_name es obligatorio');\n\nconst urls = [...new Set((Array.isArray(rawUrls) ? rawUrls : [rawUrls])\n  .map(u => String(u).trim())\n  .filter(Boolean))];\n\nif (urls.length === 0) throw new Error('Debes enviar al menos una URL');\nif (urls.length > 2) throw new Error('Solo se permiten 2 URLs por cliente');\n\nconst normalized = urls.map((url) => {\n  let parsed;\n  try { parsed = new URL(url); } catch (e) { throw new Error(`URL no valida: ${url}`); }\n  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(`Protocolo no permitido: ${url}`);\n  const domain = parsed.hostname.replace(/^www\\./, '').toLowerCase();\n  if (!/\\.(com|es)$/.test(domain)) throw new Error(`Solo se permiten dominios .com o .es: ${domain}`);\n  return { url: parsed.href, domain };\n});\n\nreturn normalized.map(({ url, domain }) => ({\n  json: { url, rootUrl: url, rootDomain: domain, executionId, clientId, companyName }\n}));"
+        "jsCode": "const raw = $input.first().json;\nconst body = raw.body ?? raw;\nconst rawUrls = body.urls ?? [];\nconst executionId = $execution?.id ?? Date.now().toString();\n\nconst clientId = String(body.client_id || body.clientId || '').trim();\nconst companyName = String(body.company_name || body.companyName || body.empresa || '').trim();\n\nif (!clientId) throw new Error('client_id es obligatorio');\nif (!companyName) throw new Error('company_name es obligatorio');\n\nfunction normalizeInputUrl(value) {\n  let input = String(value || '').trim();\n\n  if (!input) return null;\n\n  input = input\n    .replace(/^[\"']+|[\"']+$/g, '')\n    .replace(/\\s+/g, '')\n    .trim();\n\n  // Quita protocolo si existe\n  input = input.replace(/^https?:\\/\\//i, '');\n\n  // Arregla casos como //aicor.com/ o /aicor.com/\n  input = input.replace(/^\\/+/, '');\n\n  // Quita www solo para validar dominio, no para la URL final\n  const firstSlashIndex = input.indexOf('/');\n  const host = (firstSlashIndex === -1 ? input : input.slice(0, firstSlashIndex))\n    .replace(/^www\\./i, '')\n    .toLowerCase();\n\n  const path = firstSlashIndex === -1 ? '/' : input.slice(firstSlashIndex) || '/';\n\n  if (!host || !/^[a-z0-9.-]+\\.(com|es)$/.test(host)) {\n    throw new Error('Solo se permiten dominios .com o .es: ' + host);\n  }\n\n  return {\n    url: 'https://' + host + path,\n    domain: host\n  };\n}\n\nconst inputUrls = Array.isArray(rawUrls) ? rawUrls : [rawUrls];\nconst normalized = [];\n\nfor (const inputUrl of inputUrls) {\n  const result = normalizeInputUrl(inputUrl);\n  if (!result) continue;\n\n  if (!normalized.some((item) => item.url === result.url)) {\n    normalized.push(result);\n  }\n}\n\nif (normalized.length === 0) {\n  throw new Error('Debes enviar al menos una URL');\n}\n\nif (normalized.length > 2) {\n  throw new Error('Solo se permiten 2 URLs por cliente');\n}\n\nreturn normalized.map(({ url, domain }) => ({\n  json: {\n    url,\n    rootUrl: url,\n    rootDomain: domain,\n    executionId,\n    clientId,\n    companyName\n  }\n}));\n"
       },
-      "id": "63771658-fbb1-4d9e-ac45-be4a071043b6",
+      "id": "d2df3975-f024-4425-bf1f-62910d94642d",
       "name": "0. Parsear URLs",
       "type": "n8n-nodes-base.code",
       "position": [
-        -192,
-        -1200
+        -336,
+        -928
       ],
       "typeVersion": 2
     },
@@ -43,12 +43,12 @@
           }
         }
       },
-      "id": "3feddc21-dd81-4d89-86ae-5646108f5827",
+      "id": "6f18a8ee-5cbb-4c03-89f0-2987c0f9caa7",
       "name": "1. Obtener Home",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
-        48,
-        -1200
+        -96,
+        -928
       ],
       "typeVersion": 4.1,
       "onError": "continueRegularOutput"
@@ -57,52 +57,41 @@
       "parameters": {
         "jsCode": "const parsed = $('0. Parsear URLs').item.json;\nreturn [{\n  json: {\n    ...$json,\n    url: parsed.url,\n    rootUrl: parsed.rootUrl,\n    rootDomain: parsed.rootDomain,\n    executionId: parsed.executionId,\n    clientId: parsed.clientId,\n    companyName: parsed.companyName\n  }\n}];"
       },
-      "id": "d65ede65-4c90-4fa1-ae32-1c9c5c21dd5b",
+      "id": "f74f077e-cdc8-4058-9547-7b9972fc539b",
       "name": "1b. Mantener URL",
       "type": "n8n-nodes-base.code",
       "position": [
-        272,
-        -1200
+        128,
+        -928
       ],
       "typeVersion": 2
     },
     {
       "parameters": {
-        "operation": "extractHtmlContent",
-        "extractionValues": {
-          "values": [
-            {
-              "key": "urls",
-              "cssSelector": "a",
-              "returnValue": "attribute",
-              "attribute": "href",
-              "returnArray": true
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "const input = $json || {};\nconst html = String(input.body || input.data || input.html || '');\n\nconst links = [];\nconst anchorRegex = /<a\\b[^>]*?href\\s*=\\s*([\"'])(.*?)\\1/gi;\nlet match;\n\nwhile ((match = anchorRegex.exec(html)) !== null) {\n  const href = String(match[2] || '').trim();\n  if (href) links.push(href);\n}\n\nreturn [{\n  json: {\n    ...input,\n    urls: links\n  }\n}];"
       },
-      "id": "45444c3e-fb36-4db1-94d7-44da83d3af62",
+      "id": "e439b42c-75a1-4739-83ee-309eaf623532",
       "name": "2. Extraer Enlaces",
-      "type": "n8n-nodes-base.html",
+      "type": "n8n-nodes-base.code",
       "position": [
-        496,
-        -1200
+        352,
+        -928
       ],
-      "typeVersion": 1.2
+      "typeVersion": 2
     },
     {
       "parameters": {
-        "jsCode": "const allUrls = $json.urls || [];\nconst rootUrl = $json.rootUrl || $json.url || '';\nconst rootDomain = ($json.rootDomain || '').toLowerCase();\nconst executionId = $json.executionId || '';\nconst clientId = $json.clientId || '';\nconst companyName = $json.companyName || '';\n\nconst cleanUrls = [...new Set(allUrls)]\n  .map((href) => {\n    try { return new URL(String(href), rootUrl); } catch (e) { return null; }\n  })\n  .filter(Boolean)\n  .filter((u) => ['http:', 'https:'].includes(u.protocol))\n  .filter((u) => u.hostname.replace(/^www\\./, '').toLowerCase() === rootDomain)\n  .filter((u) => /\\.(com|es)$/.test(u.hostname.replace(/^www\\./, '').toLowerCase()))\n  .filter((u) => !u.hash)\n  .filter((u) => !u.href.match(/\\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|rar|mp4|mp3)$/i))\n  .filter((u) => !u.href.includes('@'))\n  .slice(0, 25);\n\nreturn cleanUrls.map((u) => ({\n  json: { url: u.href, rootUrl, rootDomain, executionId, clientId, companyName }\n}));"
+        "jsCode": "const allUrls = Array.isArray($json.urls) ? $json.urls : [];\nconst rootUrl = String($json.rootUrl || $json.url || '').trim();\nconst rootDomain = String($json.rootDomain || '').toLowerCase().replace(/^www\\./, '');\nconst executionId = $json.executionId || '';\nconst clientId = $json.clientId || $json.client_id || '';\nconst companyName = $json.companyName || $json.company_name || '';\n\nfunction normalizeRootUrl(value) {\n  let input = String(value || '').trim();\n  input = input.replace(/^[\"']+|[\"']+$/g, '').replace(/\\s+/g, '');\n  input = input.replace(/^https?:\\/\\//i, '');\n  input = input.replace(/^\\/+/g, '');\n\n  const slashIndex = input.indexOf('/');\n  const host = (slashIndex === -1 ? input : input.slice(0, slashIndex))\n    .replace(/^www\\./i, '')\n    .toLowerCase();\n  let path = slashIndex === -1 ? '/' : input.slice(slashIndex);\n  if (!path.startsWith('/')) path = '/' + path;\n\n  return host ? 'https://' + host + path : '';\n}\n\nfunction normalizeHref(href) {\n  let value = String(href || '').trim();\n\n  if (!value) return null;\n  value = value.replace(/^[\"']+|[\"']+$/g, '').replace(/\\s+/g, '').trim();\n\n  if (!value) return null;\n  if (value.startsWith('#')) return null;\n  if (/^(mailto|tel|javascript|data):/i.test(value)) return null;\n  if (value.includes('@')) return null;\n\n  value = value.split('#')[0];\n  if (!value) return null;\n\n  if (value.startsWith('//')) {\n    value = value.replace(/^\\/+/g, '');\n  } else if (value.startsWith('/')) {\n    value = rootDomain + value;\n  } else {\n    value = value.replace(/^https?:\\/\\//i, '');\n\n    if (!/^[a-z0-9.-]+\\.(com|es)(\\/|$|\\?)/i.test(value)) {\n      value = value.replace(/^\\.\\//, '');\n      value = rootDomain + '/' + value;\n    }\n  }\n\n  value = value.replace(/^https?:\\/\\//i, '');\n  value = value.replace(/^\\/+/g, '');\n\n  const slashIndex = value.indexOf('/');\n  const queryIndex = value.indexOf('?');\n  const firstSepCandidates = [slashIndex, queryIndex].filter((index) => index >= 0);\n  const firstSep = firstSepCandidates.length ? Math.min(...firstSepCandidates) : -1;\n\n  const host = (firstSep === -1 ? value : value.slice(0, firstSep))\n    .replace(/^www\\./i, '')\n    .toLowerCase();\n\n  let path = firstSep === -1 ? '/' : value.slice(firstSep);\n  if (path.startsWith('?')) path = '/' + path;\n  if (!path.startsWith('/')) path = '/' + path;\n\n  if (!host || host !== rootDomain) return null;\n  if (!/^[a-z0-9.-]+\\.(com|es)$/.test(host)) return null;\n  if (/\\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|rar|mp4|mp3|css|js|ico)(\\?|$)/i.test(path)) return null;\n\n  return 'https://' + host + path;\n}\n\nconst cleanUrls = [];\nconst seen = new Set();\nconst rootNormalized = normalizeRootUrl(rootUrl);\n\nif (rootNormalized) {\n  seen.add(rootNormalized);\n  cleanUrls.push(rootNormalized);\n}\n\nfor (const href of allUrls) {\n  const normalized = normalizeHref(href);\n  if (!normalized) continue;\n\n  if (!seen.has(normalized)) {\n    seen.add(normalized);\n    cleanUrls.push(normalized);\n  }\n\n  if (cleanUrls.length >= 25) break;\n}\n\nif (cleanUrls.length === 0) {\n  return [{\n    json: {\n      url: rootUrl,\n      rootUrl,\n      rootDomain,\n      executionId,\n      clientId,\n      companyName,\n      warning: 'No se encontraron enlaces internos; se mantiene la URL raiz.'\n    }\n  }];\n}\n\nreturn cleanUrls.map((url) => ({\n  json: {\n    url,\n    rootUrl,\n    rootDomain,\n    executionId,\n    clientId,\n    companyName\n  }\n}));"
       },
-      "id": "a2b9277f-b2b9-4c0d-b55f-3007acd75ecc",
+      "id": "20ae2413-1787-4afa-9825-9e20bb087ce1",
       "name": "3. Limpiar y Filtrar",
       "type": "n8n-nodes-base.code",
       "position": [
-        720,
-        -1200
+        576,
+        -928
       ],
-      "typeVersion": 2
+      "typeVersion": 2,
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -115,12 +104,12 @@
           }
         }
       },
-      "id": "fbc24711-0124-4cbd-b392-d3c3ac1a516d",
+      "id": "356c4e7a-5efe-4748-b01c-30b23b74a02d",
       "name": "4. Visitar Cada URL",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
-        944,
-        -1200
+        800,
+        -928
       ],
       "typeVersion": 4.1,
       "onError": "continueRegularOutput"
@@ -152,45 +141,35 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1168,
-        -1200
+        1024,
+        -928
       ],
-      "id": "b8f327c9-04d5-4c9f-b24b-3aa7a7067a49",
+      "id": "f77eeb60-a716-4aee-87fe-b852a7d4dee2",
       "name": "If"
     },
     {
       "parameters": {
-        "operation": "extractHtmlContent",
-        "extractionValues": {
-          "values": [
-            {
-              "key": "contenido",
-              "cssSelector": "article, .elementor-section, p",
-              "returnArray": true
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "const input = $json || {};\nconst html = String(input.body || input.data || input.html || '');\n\nfunction decodeEntities(text) {\n  return String(text || '')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;/gi, \"'\");\n}\n\nlet text = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ');\n\ntext = decodeEntities(text).replace(/\\s+/g, ' ').trim();\n\nreturn [{\n  json: {\n    ...input,\n    contenido: text ? [text.slice(0, 20000)] : [],\n    extracted_chars: text.length\n  }\n}];"
       },
-      "id": "99bc0b26-2fc9-43b4-a051-bcf7e6b466be",
+      "id": "b1227581-e418-4539-a6a5-c85e606fc358",
       "name": "5. Extraer Datos Subpágina",
-      "type": "n8n-nodes-base.html",
+      "type": "n8n-nodes-base.code",
       "position": [
-        1392,
-        -1216
+        1248,
+        -944
       ],
-      "typeVersion": 1.2
+      "typeVersion": 2
     },
     {
       "parameters": {
-        "jsCode": "const source = $('3. Limpiar y Filtrar').item.json;\nconst contenidoRaw = $json.contenido || [];\nconst contenidoLimpio = contenidoRaw\n  .join(' ')\n  .replace(/<[^>]*>?/gm, '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn {\n  json: {\n    url: source.url || '',\n    rootUrl: source.rootUrl || '',\n    rootDomain: source.rootDomain || '',\n    executionId: source.executionId || '',\n    client_id: source.clientId || '',\n    company_name: source.companyName || '',\n    contenido: contenidoLimpio\n  }\n};"
+        "jsCode": "const source = $json || {};\nconst contenidoRaw = Array.isArray(source.contenido) ? source.contenido : [source.contenido || ''];\nconst contenidoLimpio = contenidoRaw\n  .join(' ')\n  .replace(/<[^>]*>?/gm, '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn {\n  json: {\n    url: source.url || '',\n    rootUrl: source.rootUrl || '',\n    rootDomain: source.rootDomain || '',\n    executionId: source.executionId || '',\n    client_id: source.clientId || source.client_id || '',\n    company_name: source.companyName || source.company_name || '',\n    contenido: contenidoLimpio,\n    chars: contenidoLimpio.length\n  }\n};"
       },
-      "id": "e0610b5d-a50c-4a6c-b286-b8c16eed3df9",
+      "id": "103a3dd8-f420-4e3e-ae74-659415837df5",
       "name": "6. Formatear Todo",
       "type": "n8n-nodes-base.code",
       "position": [
-        1616,
-        -1216
+        1472,
+        -944
       ],
       "typeVersion": 2
     },
@@ -279,22 +258,22 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        1840,
-        -1216
+        1696,
+        -944
       ],
-      "id": "3ac836bf-516c-4d0c-9373-7eb91d77efa8",
+      "id": "c4136c14-9d84-4eba-bd96-a378f80a33e8",
       "name": "Execute Workflow"
     },
     {
       "parameters": {
-        "jsCode": "const formatted = $('6. Formatear Todo').all().map(item => item.json);\nconst results = formatted.map(item => ({\n  url: item.url || '',\n  status: 'done',\n  chars: (item.contenido || '').length,\n  client_id: item.client_id || '',\n  company_name: item.company_name || ''\n}));\n\nreturn [{\n  json: {\n    ok: true,\n    client_id: results[0]?.client_id || '',\n    company_name: results[0]?.company_name || '',\n    total: results.length,\n    results\n  }\n}];"
+        "jsCode": "const items = $input.all().map(item => item.json);\nconst results = items.map(item => ({\n  url: item.url || '',\n  status: item.chars > 0 ? 'done' : 'empty',\n  chars: item.chars || (item.contenido || '').length,\n  client_id: item.client_id || '',\n  company_name: item.company_name || ''\n}));\n\nreturn [{\n  json: {\n    ok: true,\n    client_id: results[0]?.client_id || '',\n    company_name: results[0]?.company_name || '',\n    total: results.length,\n    results\n  }\n}];"
       },
-      "id": "6c64d478-9954-440d-8ee5-7119886efc10",
+      "id": "9d860540-6dfd-4227-a05c-779d8f1987bd",
       "name": "7. Collect Results",
       "type": "n8n-nodes-base.code",
       "position": [
-        2064,
-        -1216
+        1920,
+        -944
       ],
       "typeVersion": 2
     },
@@ -317,12 +296,12 @@
           }
         }
       },
-      "id": "1eac2dd3-3b8a-47eb-8b8b-7740b9fc9cc6",
+      "id": "8d353474-9b84-417c-95cd-43ad8ee6242f",
       "name": "8. Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "position": [
-        2288,
-        -1216
+        2144,
+        -944
       ],
       "typeVersion": 1.1
     },
@@ -342,12 +321,12 @@
           }
         }
       },
-      "id": "0cf0e481-9264-49cb-b463-87d39332b404",
+      "id": "70985d06-5587-4a67-bf30-8c659e54e189",
       "name": "8b. Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "position": [
-        1392,
-        -1040
+        1248,
+        -768
       ],
       "typeVersion": 1.1
     }

@@ -62,10 +62,18 @@ export function ScraperPage() {
         );
     }, []);
 
+    const normalizeInputUrl = (value: string): string => {
+        const rawUrl = value.trim();
+        if (!rawUrl) return "";
+        if (rawUrl.startsWith("//")) return `https:${rawUrl}`;
+        if (!/^https?:\/\//i.test(rawUrl)) return `https://${rawUrl}`;
+        return rawUrl;
+    };
+
     const parseUrls = (raw: string): string[] =>
         raw.split(/[\n,]+/)
-            .map((u) => u.trim())
-            .filter((u) => u.startsWith("http"))
+            .map(normalizeInputUrl)
+            .filter(Boolean)
             .filter((u, i, arr) => arr.indexOf(u) === i);
 
     const validateUrls = (urls: string[]) => {
