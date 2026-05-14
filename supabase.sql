@@ -152,6 +152,11 @@ BEGIN
     IF NEW.client_id IS NULL AND NEW.metadata ? 'client_id' THEN
         NEW.client_id := NULLIF(NEW.metadata->>'client_id', '')::UUID;
     END IF;
+
+    IF NEW.source_url IS NULL AND NEW.metadata ? 'source_url' THEN
+        NEW.source_url := NULLIF(NEW.metadata->>'source_url', '');
+    END IF;
+
     RETURN NEW;
 END;
 $$;
