@@ -267,7 +267,7 @@ function EndpointCard({ ep, saving, testing, testResult, onSave, onDelete, onTes
         </div>
         <EndpointCardForm
           ep={draft}
-          onChange={(f, v) => setDraft(prev => ({ ...prev, [f]: v }))}
+          onChange={(f : any, v : any) => setDraft(prev => ({ ...prev, [f]: v }))}
           onSave={() => { onSave(draft); setEditing(false) }}
           onCancel={() => { setDraft(ep); setEditing(false) }}
           saving={saving === ep.key}
