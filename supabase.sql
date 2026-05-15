@@ -284,3 +284,187 @@ AS $$
     ORDER BY d.embedding <=> query_embedding
     LIMIT match_count;
 $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Usuarios del panel con roles. El superadmin NO tiene fila aquí;
+-- se autentica sólo con las credenciales del .env (VITE_PANEL_USER/PASS).
+-- Roles: 'admin' (ve todos los datos de su client_id, sin gestión de users)
+--        'user'  (solo dashboard y transcripts de su client_id)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS panel_users (
+    id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email       TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    client_id   UUID REFERENCES bot_clients(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_panel_users_client_id ON panel_users(client_id);
+CREATE INDEX IF NOT EXISTS idx_panel_users_role      ON panel_users(role);
+
+-- Trigger para mantener updated_at al día
+CREATE OR REPLACE FUNCTION panel_users_set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.updated_at := CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_panel_users_updated_at ON panel_users;
+CREATE TRIGGER trg_panel_users_updated_at
+BEFORE UPDATE ON panel_users
+FOR EACH ROW EXECUTE FUNCTION panel_users_set_updated_at();
+
+-- ─── Row Level Security ───────────────────────────────────────────────────────
+-- Cada usuario autenticado (admin / user) solo puede leer su propia fila.
+-- El superadmin nunca usa Supabase Auth, así que no necesita RLS aquí.
+ALTER TABLE panel_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS panel_users_self_read  ON panel_users;
+DROP POLICY IF EXISTS panel_users_self_write ON panel_users;
+
+-- Un usuario logueado puede leer su propia fila
+CREATE POLICY panel_users_self_read
+ON panel_users FOR SELECT
+USING (auth.uid() = id);
+
+-- El service_role (usado por el panel admin para crear usuarios) puede hacer todo
+-- (se activa al usar la SUPABASE_SERVICE_ROLE_KEY en el backend; el anon key no puede)
+
+-- ─── Función helper: obtener perfil del usuario actual ────────────────────────
+CREATE OR REPLACE FUNCTION get_my_panel_profile()
+RETURNS TABLE (role TEXT, client_id UUID)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+    SELECT pu.role, pu.client_id
+    FROM panel_users pu
+    WHERE pu.id = auth.uid()
+    LIMIT 1;
+$$;
+
+-- ─── RPC para que el superadmin cree usuarios y clientes ──────────────────────
+-- Esta función usa SECURITY DEFINER para saltarse el RLS, permitiendo al
+-- superadmin (que usa la key anon) crear registros en bot_clients y panel_users.
+CREATE OR REPLACE FUNCTION admin_setup_user(
+    p_company_name TEXT,
+    p_user_id UUID,
+    p_email TEXT,
+    p_role TEXT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_client_id UUID;
+    v_slug TEXT;
+BEGIN
+    -- 1. Normalizar slug
+    v_slug := lower(regexp_replace(p_company_name, '\s+', '-', 'g'));
+    v_slug := regexp_replace(v_slug, '[^a-z0-9-]', '', 'g');
+
+    -- 2. Buscar si la empresa ya existe
+    SELECT id INTO v_client_id FROM bot_clients WHERE company_name ILIKE p_company_name LIMIT 1;
+    
+    -- 3. Si no existe, crearla
+    IF v_client_id IS NULL THEN
+        -- Evitar colisiones de slug añadiendo un sufijo aleatorio si ya existe
+        IF EXISTS (SELECT 1 FROM bot_clients WHERE slug = v_slug) THEN
+            v_slug := v_slug || '-' || substr(md5(random()::text), 1, 4);
+        END IF;
+
+        INSERT INTO bot_clients (company_name, slug, status)
+        VALUES (p_company_name, v_slug, 'active')
+        RETURNING id INTO v_client_id;
+    END IF;
+
+    -- 4. Insertar el perfil del usuario
+    INSERT INTO panel_users (id, email, role, client_id)
+    VALUES (p_user_id, p_email, p_role, v_client_id);
+
+    RETURN v_client_id;
+END;
+$$;
+
+-- ─── RPCs para gestión de usuarios por Superadmin (bypassing RLS) ────────────
+
+-- Obtener todos los usuarios
+CREATE OR REPLACE FUNCTION admin_get_all_users()
+RETURNS SETOF panel_users
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+    SELECT * FROM panel_users ORDER BY created_at DESC;
+$$;
+
+-- Eliminar usuario
+CREATE OR REPLACE FUNCTION admin_delete_user(p_user_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    DELETE FROM panel_users WHERE id = p_user_id;
+END;
+$$;
+
+-- Actualizar rol
+CREATE OR REPLACE FUNCTION admin_update_user_role(p_user_id UUID, p_role TEXT)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+    UPDATE panel_users SET role = p_role WHERE id = p_user_id;
+$$;
+
+-- Actualizar cliente
+CREATE OR REPLACE FUNCTION admin_update_user_client(p_user_id UUID, p_client_id UUID)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+    UPDATE panel_users SET client_id = p_client_id WHERE id = p_user_id;
+$$;
+
+-- Obtener todos los clientes (bot_clients)
+CREATE OR REPLACE FUNCTION admin_get_all_clients()
+RETURNS SETOF bot_clients
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+    SELECT * FROM bot_clients ORDER BY company_name;
+$$;
+
+-- ─── Trigger para auto-poblar client_id en documents desde metadata ───────────
+-- n8n Langchain Supabase Vector Store inserta los campos extra dentro de la
+-- columna "metadata" (JSONB). Este trigger extrae el client_id y source_url
+-- del JSONB y los guarda en las columnas nativas de la tabla.
+CREATE OR REPLACE FUNCTION documents_extract_metadata()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Extraer client_id si existe en metadata
+    IF NEW.metadata ? 'client_id' THEN
+        NEW.client_id := NULLIF(NEW.metadata->>'client_id', '')::UUID;
+    END IF;
+
+    -- Extraer source_url si existe
+    IF NEW.metadata ? 'source_url' THEN
+        NEW.source_url := NULLIF(NEW.metadata->>'source_url', '');
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_documents_extract_metadata ON documents;
+CREATE TRIGGER trg_documents_extract_metadata
+BEFORE INSERT OR UPDATE ON documents
+FOR EACH ROW
+EXECUTE FUNCTION documents_extract_metadata();

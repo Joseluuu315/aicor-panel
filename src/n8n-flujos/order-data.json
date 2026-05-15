@@ -77,19 +77,19 @@
             "metadataValues": [
               {
                 "name": "client_id",
-                "value": "={{ $json.client_id }}"
+                "value": "={{ $('Transformar a Markdown').item.json.client_id }}"
               },
               {
                 "name": "company_name",
-                "value": "={{ $json.company_name }}"
+                "value": "={{ $('Transformar a Markdown').item.json.company_name }}"
               },
               {
                 "name": "source_url",
-                "value": "={{ $json.source_url }}"
+                "value": "={{ $('Transformar a Markdown').item.json.source_url }}"
               },
               {
                 "name": "execution_id",
-                "value": "={{ $json.execution_id }}"
+                "value": "={{ $('Transformar a Markdown').item.json.execution_id }}"
               },
               {
                 "name": "source",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Activity, Users, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { useAuth, getActiveClientId } from '../hooks/useAuth'
+import { Activity, Users, FileText, CheckCircle, XCircle } from 'lucide-react'
 
 interface Stats {
   leads_ok: number
@@ -10,34 +11,53 @@ interface Stats {
 }
 
 export function DashboardPage() {
-  const [stats, setStats] = useState<Stats>({ leads_ok: 0, leads_error: 0, transcripts: 0, sessions_today: 0 })
+  const { user } = useAuth()
+  const clientId = getActiveClientId(user)
+
+  const [stats, setStats]           = useState<Stats>({ leads_ok: 0, leads_error: 0, transcripts: 0, sessions_today: 0 })
   const [recentLeads, setRecentLeads] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]       = useState(true)
 
   useEffect(() => {
     async function load() {
       try {
+        // Construir queries base con filtro de client_id si aplica
+        const baseLeads      = clientId
+          ? supabase.from('lead_logs').select('id', { count: 'exact', head: true }).eq('client_id', clientId)
+          : supabase.from('lead_logs').select('id', { count: 'exact', head: true })
+
+        const baseTranscripts = clientId
+          ? supabase.from('transcript_logs').select('id', { count: 'exact', head: true }).eq('client_id', clientId)
+          : supabase.from('transcript_logs').select('id', { count: 'exact', head: true })
+
+        const baseRecent = clientId
+          ? supabase.from('lead_logs').select('*').eq('client_id', clientId)
+          : supabase.from('lead_logs').select('*')
+
         const [leadsOk, leadsErr, transcripts, recentResp] = await Promise.all([
-          supabase.from('lead_logs').select('id', { count: 'exact', head: true }).eq('estado', 'OK'),
-          supabase.from('lead_logs').select('id', { count: 'exact', head: true }).eq('estado', 'ERROR'),
-          supabase.from('transcript_logs').select('id', { count: 'exact', head: true }),
-          supabase.from('lead_logs').select('*').order('created_at', { ascending: false }).limit(8),
+          baseLeads.eq('estado', 'OK'),
+          (clientId
+            ? supabase.from('lead_logs').select('id', { count: 'exact', head: true }).eq('client_id', clientId)
+            : supabase.from('lead_logs').select('id', { count: 'exact', head: true })
+          ).eq('estado', 'ERROR'),
+          baseTranscripts,
+          baseRecent.order('created_at', { ascending: false }).limit(8),
         ])
 
         const todayStart = new Date()
         todayStart.setHours(0, 0, 0, 0)
-        const sessionsToday = await supabase
-          .from('chat_sessions')
-          .select('session_id', { count: 'exact', head: true })
-          .gte('created_at', todayStart.toISOString())
+        const sessionsQuery = clientId
+          ? supabase.from('chat_sessions').select('session_id', { count: 'exact', head: true }).eq('client_id', clientId).gte('created_at', todayStart.toISOString())
+          : supabase.from('chat_sessions').select('session_id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString())
+
+        const sessionsToday = await sessionsQuery
 
         setStats({
-          leads_ok: leadsOk.count || 0,
-          leads_error: leadsErr.count || 0,
-          transcripts: transcripts.count || 0,
+          leads_ok:       leadsOk.count    || 0,
+          leads_error:    leadsErr.count   || 0,
+          transcripts:    transcripts.count || 0,
           sessions_today: sessionsToday.count || 0,
         })
-
         setRecentLeads(recentResp.data || [])
       } catch (e) {
         console.error(e)
@@ -46,14 +66,20 @@ export function DashboardPage() {
       }
     }
     load()
-  }, [])
+  }, [clientId])
 
   return (
     <>
       <div className="page-header">
         <div>
           <div className="page-title">Dashboard</div>
-          <div className="page-subtitle">resumen de actividad del chatbot</div>
+          <div className="page-subtitle">
+            resumen de actividad
+            {clientId
+              ? <> · cliente <code style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{clientId.slice(0, 8)}…</code></>
+              : ' · todos los clientes'
+            }
+          </div>
         </div>
       </div>
 

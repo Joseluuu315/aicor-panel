@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useAuth, getActiveClientId } from "../hooks/useAuth";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const N8N_WEBHOOK_URL = "/webhook/scraper-run"; // ← proxy local, sin CORS
@@ -40,13 +41,21 @@ function elapsed(start: Date, end?: Date) {
 }
 
 export function ScraperPage() {
+    const { user } = useAuth();
+    const sessionClientId = getActiveClientId(user);
+    const isClientLocked = !!sessionClientId;
+
     const [urlInput, setUrlInput] = useState("");
-    const [clientId, setClientId] = useState("");
+    const [clientId, setClientId] = useState(sessionClientId ?? "");
     const [companyName, setCompanyName] = useState("");
     const [jobs, setJobs] = useState<Job[]>([]);
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
     const logsEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (sessionClientId) setClientId(sessionClientId);
+    }, [sessionClientId]);
 
     useEffect(() => {
         logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -322,14 +331,20 @@ export function ScraperPage() {
                     <div className="input-area">
                         <div className="input-label">// URLs a scrapear</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                            <input
-                                className="url-textarea"
-                                style={{ minHeight: 0, resize: "none" }}
-                                placeholder="ID cliente Supabase"
-                                value={clientId}
-                                onChange={(e) => setClientId(e.target.value)}
-                                disabled={running}
-                            />
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    className="url-textarea"
+                                    style={{ minHeight: 0, resize: "none", width: '100%', opacity: isClientLocked ? 0.6 : 1 }}
+                                    placeholder="ID cliente Supabase"
+                                    value={clientId}
+                                    onChange={(e) => !isClientLocked && setClientId(e.target.value)}
+                                    disabled={running || isClientLocked}
+                                    title={isClientLocked ? "Tu client_id está fijado por tu rol" : ""}
+                                />
+                                {isClientLocked && (
+                                    <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-dim)', pointerEvents: 'none' }}>🔒</span>
+                                )}
+                            </div>
                             <input
                                 className="url-textarea"
                                 style={{ minHeight: 0, resize: "none" }}

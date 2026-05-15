@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { supabase, TranscriptLog, ChatSession } from '../lib/supabase'
+import { useAuth, getActiveClientId } from '../hooks/useAuth'
 import { FileText, ExternalLink, MessageSquare, User, Bot, RefreshCw, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function TranscriptsPage() {
+  const { user } = useAuth()
+  const clientId = getActiveClientId(user)
+
   const [transcripts, setTranscripts] = useState<TranscriptLog[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<TranscriptLog | null>(null)
@@ -12,17 +16,19 @@ export function TranscriptsPage() {
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase
+    let q = supabase
       .from('transcript_logs')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50)
+    if (clientId) q = q.eq('client_id', clientId)
+    const { data, error } = await q
     if (error) toast.error('Error cargando transcripts')
     setTranscripts(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [clientId])
 
   async function openTranscript(t: TranscriptLog) {
     setSelected(t)
@@ -33,13 +39,15 @@ export function TranscriptsPage() {
     const from = new Date(created.getTime() - 60 * 60 * 1000).toISOString()
     const to   = new Date(created.getTime() + 5 * 60 * 1000).toISOString()
 
-    const { data } = await supabase
+    let msgsQ = supabase
       .from('chat_sessions')
       .select('*')
       .gte('created_at', from)
       .lte('created_at', to)
       .order('created_at', { ascending: true })
       .limit(100)
+    if (clientId) msgsQ = msgsQ.eq('client_id', clientId)
+    const { data } = await msgsQ
 
     setMessages(data || [])
     setLoadingMsgs(false)

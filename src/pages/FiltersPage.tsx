@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth, getActiveClientId } from '../hooks/useAuth'
 import { triggerN8nConfigUpdate } from '../lib/n8n'
 import { Shield, Plus, Trash2, RefreshCw, Save, AlertTriangle, Globe, Code, Type } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -44,6 +45,9 @@ const TAB_LABELS = {
 }
 
 export function FiltersPage() {
+    const { user } = useAuth()
+    const clientId = getActiveClientId(user)
+
     const [tab, setTab] = useState<TabType>('domains')
     const [filters, setFilters] = useState<FilterEntry[]>([])
     const [loading, setLoading] = useState(true)
@@ -58,11 +62,16 @@ export function FiltersPage() {
         setLoading(true)
         try {
             // We store filters as a JSON blob in bot_config key="filters_json"
-            const { data } = await supabase
+            let q = supabase
                 .from('bot_config')
                 .select('value')
                 .eq('key', 'filters_json')
-                .single()
+            if (clientId) {
+                q = q.eq('client_id', clientId)
+            } else {
+                q = q.is('client_id', null)
+            }
+            const { data } = await q.single()
 
             if (data?.value) {
                 const parsed = JSON.parse(data.value)
@@ -96,7 +105,7 @@ export function FiltersPage() {
         }
     }
 
-    useEffect(() => { load() }, [])
+    useEffect(() => { load() }, [clientId])
 
     async function saveAll(entries: FilterEntry[], len?: number) {
         setSaving(true)
@@ -113,6 +122,7 @@ export function FiltersPage() {
                 .from('bot_config')
                 .upsert({
                     key: 'filters_json',
+                    client_id: clientId || null,
                     value: JSON.stringify(payload),
                     label: 'Filtros de intención',
                     description: 'Reglas de bloqueo del Filtro de Intención en n8n',
@@ -120,7 +130,7 @@ export function FiltersPage() {
                     category: 'general',
                     sort_order: 99,
                     updated_at: new Date().toISOString(),
-                }, { onConflict: 'key' })
+                }, { onConflict: 'client_id,key' })
 
             if (error) throw error
 

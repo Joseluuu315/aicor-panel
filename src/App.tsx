@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Toaster } from 'react-hot-toast'
-import { AuthProvider, useAuth } from './hooks/useAuth'
+import { AuthProvider, useAuth, isSuperAdmin, isAtLeastAdmin } from './hooks/useAuth'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -11,16 +11,26 @@ import { ConfigPage } from './pages/ConfigPage'
 import { FiltersPage } from './pages/FiltersPage'
 import { ExamplePage } from './pages/ExamplePage'
 import { ScraperPage } from './pages/ScraperPage'
+import { UsersPage } from './pages/UsersPage'
 
-type Page = 'dashboard' | 'transcripts' | 'endpoints' | 'prompts' | 'config' | 'filters' | 'example' | 'scraper'
+export type Page =
+  | 'dashboard'
+  | 'transcripts'
+  | 'endpoints'
+  | 'prompts'
+  | 'config'
+  | 'filters'
+  | 'example'
+  | 'scraper'
+  | 'users'
 
 function AppInner() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [page, setPage] = useState<Page>('dashboard')
 
   if (!isAuthenticated) return <LoginPage />
 
-  const pages: Record<Page, React.ReactNode> = {
+  const allPages: Record<Page, React.ReactNode> = {
     dashboard:   <DashboardPage />,
     transcripts: <TranscriptsPage />,
     endpoints:   <EndpointsPage />,
@@ -29,11 +39,21 @@ function AppInner() {
     filters:     <FiltersPage />,
     example:     <ExamplePage />,
     scraper:     <ScraperPage />,
+    users:       <UsersPage />,
+  }
+
+  // Restringir navegación según rol
+  const handleNav = (p: Page) => {
+    // Solo superadmin puede ir a Users
+    if (p === 'users' && !isSuperAdmin(user)) return
+    // Solo admin/superadmin pueden ir a config-level pages
+    if (['endpoints', 'prompts', 'config', 'filters', 'scraper'].includes(p) && !isAtLeastAdmin(user)) return
+    setPage(p)
   }
 
   return (
-    <Layout page={page} onNav={setPage}>
-      {pages[page]}
+    <Layout page={page} onNav={handleNav}>
+      {allPages[page]}
     </Layout>
   )
 }
