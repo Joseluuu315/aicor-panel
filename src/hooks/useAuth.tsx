@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   /** Carga el perfil del usuario de Supabase Auth desde panel_users */
-  async function hydrateSupabaseUser(email: string) {
+  async function hydrateSupabaseUser(email: string): Promise<boolean> {
     const { data } = await supabase.rpc('get_my_panel_profile')
     if (data && data.length > 0) {
       const profile = data[0]
@@ -85,7 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clientId: profile.client_id ?? null,
         displayName: email.split('@')[0],
       })
+      return true
     }
+    return false
   }
 
   const login = useCallback(async (
@@ -107,18 +109,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // ── 2. Admin / User por Supabase Auth ─────────────────────────────────────
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    console.log('[LOGIN] Empezando signInWithPassword...')
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: emailOrUser,
       password: pass,
     })
+    console.log('[LOGIN] Terminado signInWithPassword. Error:', authError?.message)
 
     if (authError) {
-      return { ok: false, error: 'Credenciales incorrectas.' }
+      return { ok: false, error: authError.message }
     }
 
     // hydrateSupabaseUser se ejecutará vía onAuthStateChange
     // Pero también lo hacemos aquí para respuesta inmediata
+    console.log('[LOGIN] Llamando a get_my_panel_profile...')
     const { data: profileData, error: profileError } = await supabase.rpc('get_my_panel_profile')
+    console.log('[LOGIN] Terminado get_my_panel_profile. Data:', profileData, 'Error:', profileError?.message)
 
     if (profileError || !profileData?.length) {
       await supabase.auth.signOut()
@@ -126,7 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const profile = profileData[0]
+    console.log('[LOGIN] Llamando a getUser...')
     const { data: { user: authUser } } = await supabase.auth.getUser()
+    console.log('[LOGIN] Terminado getUser. User:', authUser?.email)
 
     setUser({
       role: profile.role as UserRole,

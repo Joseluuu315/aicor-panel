@@ -20,9 +20,15 @@ export function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { ok, error: loginError } = await login(credential, pass)
-    if (!ok) setError(loginError || 'Credenciales incorrectas.')
-    setLoading(false)
+    try {
+      const { ok, error: loginError } = await login(credential, pass)
+      if (!ok) setError(loginError || 'Credenciales incorrectas.')
+    } catch (err: any) {
+      console.error(err)
+      setError(err?.message || 'Error inesperado del sistema.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
