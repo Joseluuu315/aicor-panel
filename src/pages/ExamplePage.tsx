@@ -30,22 +30,55 @@ export function ExamplePage() {
   const cta = useReveal(560);
   const cards = useReveal(680);
 
-  const chatUrl = `${CHAT_URL}?client_id=${encodeURIComponent(clientId.trim())}&company_name=${encodeURIComponent(companyName.trim())}`;
+  // El webhook real al que el script enviará los mensajes
+  const WEBHOOK_URL = window.location.origin + '/webhook/48e4053f-83ac-471e-880e-91f47e39b0ee';
+
+  // Generamos el HTML del iframe para inyectar los metadatos directamente
+  const chatHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; padding: 0; background: transparent; }
+    /* Ajustes para que el chat ocupe el 100% del iframe */
+    #n8n-chat { width: 100vw; height: 100vh; }
+  </style>
+  <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="n8n-chat"></div>
+  <script type="module">
+    import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js';
+    createChat({
+      webhookUrl: '${WEBHOOK_URL}',
+      target: '#n8n-chat',
+      initialMessages: ['¡Hola! Soy el asistente virtual.\\n¿Cómo te llamas?'],
+      metadata: {
+        client_id: '${clientId.trim()}',
+        company_name: '${companyName.trim()}'
+      }
+    });
+  </script>
+</body>
+</html>
+  `;
 
   // lazy-load iframe src on first open
   const handleToggle = () => {
     setChatOpen((prev) => !prev);
     if (!iframeLoaded && iframeRef.current) {
-      iframeRef.current.src = chatUrl;
+      iframeRef.current.srcdoc = chatHtml;
       setIframeLoaded(true);
     }
   };
 
   useEffect(() => {
     if (iframeLoaded && iframeRef.current) {
-      iframeRef.current.src = chatUrl;
+      iframeRef.current.srcdoc = chatHtml;
     }
-  }, [chatUrl, iframeLoaded]);
+  }, [chatHtml, iframeLoaded]);
 
   return (
     <>
@@ -664,7 +697,7 @@ export function ExamplePage() {
         {/* Live inline iframe */}
         <div className="demo-iframe-wrapper">
           <iframe
-            src={chatUrl}
+            srcDoc={chatHtml}
             title="Demo Aicor Chat"
             allow="microphone"
           />
