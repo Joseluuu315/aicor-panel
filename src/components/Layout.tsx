@@ -35,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'config',      label: 'Configuración',icon: <Settings size={15} />,        minRole: 'admin'      },
   { id: 'filters',     label: 'Filtros',      icon: <Shield size={15} />,          minRole: 'admin'      },
   { id: 'example',     label: 'Ejemplo',      icon: <Bot size={15} />,             minRole: 'user'       },
-  { id: 'scraper',     label: 'Scraper',      icon: <ScanSearch size={15} />,      minRole: 'admin'      },
+  { id: 'scraper',     label: 'Scraper',      icon: <ScanSearch size={15} />,      minRole: 'user'       },
   { id: 'users',       label: 'Usuarios',     icon: <Users size={15} />,           minRole: 'superadmin' },
 ]
 

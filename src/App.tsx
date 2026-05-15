@@ -47,7 +47,7 @@ function AppInner() {
     // Solo superadmin puede ir a Users
     if (p === 'users' && !isSuperAdmin(user)) return
     // Solo admin/superadmin pueden ir a config-level pages
-    if (['endpoints', 'prompts', 'config', 'filters', 'scraper'].includes(p) && !isAtLeastAdmin(user)) return
+    if (['endpoints', 'prompts', 'config', 'filters'].includes(p) && !isAtLeastAdmin(user)) return
     setPage(p)
   }
 

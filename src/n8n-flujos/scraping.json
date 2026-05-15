@@ -186,10 +186,10 @@
           "mappingMode": "defineBelow",
           "value": {
             "contenidoScrapping": "={{ $json.contenido }}",
-            "client_id": "={{ $json.client_id }}",
-            "company_name": "={{ $json.company_name }}",
+            "client_id": "={{ $('0. Parsear URLs').first().json.clientId }}",
+            "company_name": "={{ $('0. Parsear URLs').first().json.companyName }}",
             "source_url": "={{ $json.url }}",
-            "execution_id": "={{ $json.executionId }}"
+            "execution_id": "={{ $('0. Parsear URLs').first().json.executionId }}"
           },
           "matchingColumns": [
             "contenidoScrapping",
