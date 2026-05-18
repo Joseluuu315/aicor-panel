@@ -33,7 +33,7 @@
         -512
       ],
       "id": "e87a0f73-bef6-4e30-a57d-2fbae28894a2",
-      "name": "Extraer Datos Entrada1"
+      "name": "Merge Datos Entrada"
     },
     {
       "parameters": {
@@ -840,7 +840,7 @@
         ]
       ]
     },
-    "Extraer Datos Entrada1": {
+    "Merge Datos Entrada": {
       "main": [
         [
           {
@@ -1115,7 +1115,7 @@
       "main": [
         [
           {
-            "node": "Extraer Datos Entrada1",
+            "node": "Merge Datos Entrada",
             "type": "main",
             "index": 0
           }
